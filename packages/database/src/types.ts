@@ -142,6 +142,52 @@ export type GroupWithMembers = Prisma.GroupGetPayload<{
   };
 }>;
 
+// Group with full details including creator, members, and conversation
+export type GroupWithDetails = Prisma.GroupGetPayload<{
+  include: {
+    createdBy: {
+      select: {
+        id: true;
+        username: true;
+        firstName: true;
+        lastName: true;
+        avatar: true;
+      };
+    };
+    members: {
+      include: {
+        user: {
+          select: {
+            id: true;
+            username: true;
+            firstName: true;
+            lastName: true;
+            avatar: true;
+            isOnline: true;
+            lastSeen: true;
+          };
+        };
+      };
+    };
+    conversation: {
+      include: {
+        messages: {
+          take: 1;
+          orderBy: { createdAt: 'desc' };
+          include: {
+            sender: {
+              select: {
+                id: true;
+                username: true;
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+}>;
+
 // Database connection status
 export interface DatabaseStatus {
   connected: boolean;
