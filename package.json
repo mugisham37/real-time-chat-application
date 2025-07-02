@@ -1,0 +1,46 @@
+{
+  "name": "real-time-chat-application",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ultimate Full-Stack Real-time Chat Application",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:client": "turbo run dev --filter=client",
+    "dev:server": "turbo run dev --filter=server",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "test:client": "turbo run test --filter=client",
+    "test:server": "turbo run test --filter=server",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean",
+    "setup": "npm install && npm run db:generate && npm run db:migrate",
+    "db:generate": "turbo run db:generate --filter=database",
+    "db:migrate": "turbo run db:migrate --filter=database",
+    "db:seed": "turbo run db:seed --filter=database",
+    "db:studio": "turbo run db:studio --filter=database",
+    "db:reset": "turbo run db:reset --filter=database",
+    "docker:dev": "docker-compose up -d",
+    "docker:prod": "docker-compose -f docker-compose.prod.yml up -d",
+    "docker:down": "docker-compose down",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\""
+  },
+  "devDependencies": {
+    "turbo": "^1.13.4",
+    "@types/node": "^20.11.24",
+    "typescript": "^5.3.3",
+    "prettier": "^3.2.5",
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "packageManager": "npm@10.2.4"
+}

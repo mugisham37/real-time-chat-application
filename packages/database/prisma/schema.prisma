@@ -1,0 +1,322 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and profile
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  username  String   @unique
+  firstName String?
+  lastName  String?
+  avatar    String?
+  bio       String?
+  isOnline  Boolean  @default(false)
+  lastSeen  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Authentication
+  password     String
+  emailVerified DateTime?
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
+
+  // Relationships
+  sentMessages     Message[] @relation("MessageSender")
+  conversations    ConversationParticipant[]
+  groupsCreated    Group[] @relation("GroupCreator")
+  groupMemberships GroupMember[]
+  sentInvitations  GroupInvitation[] @relation("InvitationSender")
+  receivedInvitations GroupInvitation[] @relation("InvitationReceiver")
+  joinRequests     GroupJoinRequest[]
+  notifications    Notification[]
+  messageReactions MessageReaction[]
+  userSessions     UserSession[]
+  fileUploads      FileUpload[]
+
+  @@map("users")
+}
+
+// Conversation model for direct and group chats
+model Conversation {
+  id        String            @id @default(cuid())
+  type      ConversationType  @default(DIRECT)
+  name      String?           // For group conversations
+  avatar    String?           // For group conversations
+  isActive  Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  // Relationships
+  participants ConversationParticipant[]
+  messages     Message[]
+  group        Group?
+
+  @@map("conversations")
+}
+
+// Pivot table for conversation participants
+model ConversationParticipant {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime @default(now())
+  leftAt         DateTime?
+  role           ParticipantRole @default(MEMBER)
+  lastReadAt     DateTime @default(now())
+
+  // Relationships
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+// Group model for group-specific data
+model Group {
+  id             String   @id @default(cuid())
+  conversationId String   @unique
+  name           String
+  description    String?
+  avatar         String?
+  isPrivate      Boolean  @default(false)
+  maxMembers     Int      @default(100)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relationships
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("GroupCreator", fields: [createdById], references: [id])
+  members      GroupMember[]
+  invitations  GroupInvitation[]
+  joinRequests GroupJoinRequest[]
+
+  @@map("groups")
+}
+
+// Group member model
+model GroupMember {
+  id       String      @id @default(cuid())
+  groupId  String
+  userId   String
+  role     GroupRole   @default(MEMBER)
+  joinedAt DateTime    @default(now())
+
+  // Relationships
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("group_members")
+}
+
+// Group invitation model
+model GroupInvitation {
+  id         String            @id @default(cuid())
+  groupId    String
+  senderId   String
+  receiverId String
+  status     InvitationStatus  @default(PENDING)
+  message    String?
+  expiresAt  DateTime?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  // Relationships
+  group    Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender   User  @relation("InvitationSender", fields: [senderId], references: [id])
+  receiver User  @relation("InvitationReceiver", fields: [receiverId], references: [id])
+
+  @@unique([groupId, receiverId])
+  @@map("group_invitations")
+}
+
+// Group join request model
+model GroupJoinRequest {
+  id        String       @id @default(cuid())
+  groupId   String
+  userId    String
+  status    RequestStatus @default(PENDING)
+  message   String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  // Relationships
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+  @@map("group_join_requests")
+}
+
+// Message model
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String?
+  type           MessageType @default(TEXT)
+  metadata       Json?       // For storing additional message data
+  isEdited       Boolean     @default(false)
+  editedAt       DateTime?
+  replyToId      String?     // For message replies
+  isDeleted      Boolean     @default(false)
+  deletedAt      DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Relationships
+  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User              @relation("MessageSender", fields: [senderId], references: [id])
+  replyTo      Message?          @relation("MessageReply", fields: [replyToId], references: [id])
+  replies      Message[]         @relation("MessageReply")
+  reactions    MessageReaction[]
+  attachments  MessageAttachment[]
+
+  @@map("messages")
+}
+
+// Message reaction model
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  // Relationships
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@map("message_reactions")
+}
+
+// Message attachment model
+model MessageAttachment {
+  id         String @id @default(cuid())
+  messageId  String
+  fileUploadId String
+
+  // Relationships
+  message    Message    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fileUpload FileUpload @relation(fields: [fileUploadId], references: [id])
+
+  @@map("message_attachments")
+}
+
+// File upload model
+model FileUpload {
+  id           String   @id @default(cuid())
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
+  url          String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  // Relationships
+  uploadedBy  User                @relation(fields: [uploadedById], references: [id])
+  attachments MessageAttachment[]
+
+  @@map("file_uploads")
+}
+
+// Notification model
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?            // Additional notification data
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// User session model for managing active sessions
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  userAgent String?
+  ipAddress String?
+  isActive  Boolean  @default(true)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+// Enums
+enum ConversationType {
+  DIRECT
+  GROUP
+}
+
+enum ParticipantRole {
+  MEMBER
+  ADMIN
+}
+
+enum GroupRole {
+  MEMBER
+  MODERATOR
+  ADMIN
+  OWNER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  AUDIO
+  VIDEO
+  SYSTEM
+}
+
+enum NotificationType {
+  MESSAGE
+  GROUP_INVITATION
+  GROUP_JOIN_REQUEST
+  MENTION
+  REACTION
+  SYSTEM
+}

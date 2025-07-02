@@ -1,0 +1,156 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: chatapp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: chatapp_user
+      POSTGRES_PASSWORD: your_secure_password
+      POSTGRES_DB: chatapp
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./packages/database/init:/docker-entrypoint-initdb.d
+    networks:
+      - chatapp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatapp_user -d chatapp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: chatapp-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - chatapp-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Development Server (Node.js Backend)
+  server:
+    build:
+      context: .
+      dockerfile: ./apps/server/Dockerfile.dev
+    container_name: chatapp-server
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+      - "9229:9229" # Debug port
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://chatapp_user:your_secure_password@postgres:5432/chatapp?schema=public
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-jwt-secret-key
+      - CORS_ORIGIN=http://localhost:3000
+      - PORT=4000
+    volumes:
+      - ./apps/server:/app
+      - ./packages:/packages
+      - /app/node_modules
+      - /packages/shared/node_modules
+      - /packages/database/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - chatapp-network
+    command: npm run dev
+
+  # Development Client (Next.js Frontend)
+  client:
+    build:
+      context: .
+      dockerfile: ./apps/client/Dockerfile.dev
+    container_name: chatapp-client
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_SOCKET_URL=http://localhost:4000
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=dev-nextauth-secret
+    volumes:
+      - ./apps/client:/app
+      - ./packages:/packages
+      - /app/node_modules
+      - /app/.next
+      - /packages/shared/node_modules
+      - /packages/ui/node_modules
+    depends_on:
+      - server
+    networks:
+      - chatapp-network
+    command: npm run dev
+
+  # Prisma Studio (Database GUI)
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: ./packages/database/Dockerfile.studio
+    container_name: chatapp-prisma-studio
+    restart: unless-stopped
+    ports:
+      - "5555:5555"
+    environment:
+      - DATABASE_URL=postgresql://chatapp_user:your_secure_password@postgres:5432/chatapp?schema=public
+    volumes:
+      - ./packages/database:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - chatapp-network
+    profiles:
+      - tools
+
+  # Redis Commander (Redis GUI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: chatapp-redis-commander
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - chatapp-network
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  chatapp-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

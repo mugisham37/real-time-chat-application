@@ -1,0 +1,45 @@
+{
+  "name": "@chatapp/database",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Database schemas and utilities for Chat Application",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:seed": "tsx seed/index.ts",
+    "db:studio": "prisma studio --port 5555",
+    "db:reset": "prisma migrate reset --force",
+    "db:push": "prisma db push",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.8.1",
+    "bcryptjs": "^2.4.3",
+    "nanoid": "^5.0.4"
+  },
+  "devDependencies": {
+    "prisma": "^5.8.1",
+    "tsx": "^4.7.0",
+    "@types/bcryptjs": "^2.4.6",
+    "typescript": "^5.3.3"
+  },
+  "prisma": {
+    "schema": "./prisma/schema.prisma"
+  }
+}
