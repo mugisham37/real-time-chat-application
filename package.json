@@ -32,11 +32,12 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
   "devDependencies": {
-    "turbo": "^1.13.4",
     "@types/node": "^20.11.24",
-    "typescript": "^5.3.3",
+    "@types/uuid": "^10.0.0",
+    "concurrently": "^8.2.2",
     "prettier": "^3.2.5",
-    "concurrently": "^8.2.2"
+    "turbo": "^1.13.4",
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0",

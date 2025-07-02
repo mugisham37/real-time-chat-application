@@ -375,7 +375,8 @@ export const fileUtils = {
     try {
       // This is a simplified version - in production, you'd use a library like 'file-type'
       // to properly detect file types by reading magic numbers
-      const buffer = fs.readFileSync(filePath, { start: 0, end: 10 });
+      const buffer = fs.readFileSync(filePath);
+      const magicBytes = buffer.subarray(0, 10);
       
       // Basic magic number checks
       const magicNumbers: { [key: string]: number[] } = {
@@ -389,7 +390,7 @@ export const fileUtils = {
       if (!magic) return true; // Skip validation for unknown types
 
       for (let i = 0; i < magic.length; i++) {
-        if (buffer[i] !== magic[i]) {
+        if (magicBytes[i] !== magic[i]) {
           return false;
         }
       }

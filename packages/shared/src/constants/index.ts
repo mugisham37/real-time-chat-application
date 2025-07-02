@@ -318,6 +318,31 @@ export const DATE_FORMATS = {
   FULL: 'MMM DD, YYYY HH:mm',
 } as const;
 
+// File Upload Limits
+export const FILE_UPLOAD_LIMITS = {
+  IMAGE: { maxSize: 5 * 1024 * 1024 }, // 5MB
+  DOCUMENT: { maxSize: 10 * 1024 * 1024 }, // 10MB
+  AUDIO: { maxSize: 20 * 1024 * 1024 }, // 20MB
+  VIDEO: { maxSize: 50 * 1024 * 1024 }, // 50MB
+  AVATAR: { maxSize: 2 * 1024 * 1024 }, // 2MB
+  GENERAL: { maxSize: 10 * 1024 * 1024 }, // 10MB
+} as const;
+
+// Allowed File Types
+export const ALLOWED_FILE_TYPES = {
+  IMAGES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  DOCUMENTS: [
+    'application/pdf',
+    'text/plain',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ],
+  AUDIO: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/aac'],
+  VIDEO: ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'],
+} as const;
+
 // Local Storage Keys
 export const STORAGE_KEYS = {
   AUTH_TOKEN: 'chatapp_auth_token',
