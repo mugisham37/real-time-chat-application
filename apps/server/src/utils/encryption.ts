@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { config } from '../config/config';
+import { config } from '../config/index';
 import { logger } from './logger';
 
 // Encryption configuration

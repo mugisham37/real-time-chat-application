@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { createReadStream, createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
-import { config } from '../config/config';
+import { config } from '../config/index';
 import { logger, uploadLogger } from './logger';
 import { ApiError } from './apiError';
 import { generateUUID } from './encryption';

@@ -1,4 +1,4 @@
-import { config } from '../config/config';
+import { config } from '../config/index';
 import { logger, cacheLogger } from './logger';
 import { ChatMetrics } from './metrics';
 

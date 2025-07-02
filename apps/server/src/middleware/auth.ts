@@ -5,6 +5,7 @@ import { config } from '../config';
 import { getRedisManager } from '../config/redis';
 import { logger } from '../utils/logger';
 import { ApiError } from './errorHandler';
+import { parseJWTExpiry, createJWTSignOptions } from '../config/jwt';
 
 // Extend Request interface to include user
 declare global {
@@ -586,24 +587,6 @@ export const revokeAllUserSessions = async (userId: string): Promise<void> => {
   }
 };
 
-// Helper function to validate and format JWT expiresIn value
-const getJwtExpiresIn = (envValue: string | undefined, defaultValue: string): string | number => {
-  if (!envValue) return defaultValue;
-  
-  // If it's a pure number, convert to number (seconds)
-  if (/^\d+$/.test(envValue)) {
-    return parseInt(envValue, 10);
-  }
-  
-  // If it's a time string format (e.g., '1h', '30m', '7d'), return as string
-  if (/^\d+[smhdwy]$/.test(envValue)) {
-    return envValue;
-  }
-  
-  // If invalid format, use default
-  logger.warn(`Invalid JWT_EXPIRES_IN format: ${envValue}, using default: ${defaultValue}`);
-  return defaultValue;
-};
 
 // Token generation utilities
 export const generateToken = (payload: {
@@ -620,11 +603,12 @@ export const generateToken = (payload: {
     throw new Error('JWT_SECRET environment variable is not set');
   }
 
-  const expiresIn = getJwtExpiresIn(process.env.JWT_EXPIRES_IN || config.jwt?.expiresIn, '7d');
-
-  const options: SignOptions = {
-    expiresIn: expiresIn
-  };
+  const options = createJWTSignOptions({
+    expiresIn: process.env.JWT_EXPIRES_IN || config.jwt?.expiresIn || '7d',
+    issuer: config.jwt?.issuer,
+    audience: config.jwt?.audience,
+    algorithm: 'HS256',
+  });
 
   return jwt.sign(payload, jwtSecret, options);
 };
@@ -636,11 +620,12 @@ export const generateRefreshToken = (payload: Omit<RefreshTokenPayload, 'iat' | 
     throw new Error('JWT_SECRET environment variable is not set');
   }
 
-  const expiresIn = getJwtExpiresIn(process.env.JWT_REFRESH_EXPIRES_IN || config.jwt?.refreshExpiresIn, '30d');
-
-  const options: SignOptions = {
-    expiresIn: expiresIn
-  };
+  const options = createJWTSignOptions({
+    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || config.jwt?.refreshExpiresIn || '30d',
+    issuer: config.jwt?.issuer,
+    audience: config.jwt?.audience,
+    algorithm: 'HS256',
+  });
 
   return jwt.sign(payload, jwtSecret, options);
 };

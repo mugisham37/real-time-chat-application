@@ -16,7 +16,7 @@
  */
 
 // Core utilities
-export * from '../config/config';
+export * from '../config/index';
 export * from './logger';
 export * from './apiError';
 export * from './encryption';
@@ -28,7 +28,7 @@ export * from './cache';
 export * from './validation';
 
 // Default exports for convenience
-export { default as config } from '../config/config';
+export { default as config } from '../config/index';
 export { default as logger } from './logger';
 export { default as ApiError } from './apiError';
 export { default as encryption } from './encryption';

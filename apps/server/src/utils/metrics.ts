@@ -1,4 +1,4 @@
-import { config } from '../config/config';
+import { config } from '../config/index';
 import { logger, metricsLogger } from './logger';
 
 // Metrics storage interface

@@ -87,13 +87,16 @@ const createRateLimitHandler = (type: string) => {
       method: req.method,
     });
 
-    throw ApiError.tooManyRequests(
+    const error = new ApiError(
+      429,
       `Too many ${type} requests. Please try again later.`,
+      'RATE_LIMIT_EXCEEDED',
       {
         type,
         retryAfter: res.getHeader('Retry-After'),
       }
     );
+    throw error;
   };
 };
 
@@ -246,13 +249,16 @@ export const bruteForceProtection = (options?: {
           userAgent: req.get('User-Agent'),
         });
         
-        return next(ApiError.tooManyRequests(
+        const error = new ApiError(
+          429,
           'Account temporarily locked due to too many failed attempts.',
+          'RATE_LIMIT_EXCEEDED',
           {
             retryAfter: remainingTime,
             attempts: attemptCount,
           }
-        ));
+        );
+        return next(error);
       }
       
       // Store attempt count for failed login
