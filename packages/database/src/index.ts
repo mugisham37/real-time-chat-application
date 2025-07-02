@@ -17,9 +17,6 @@ export * from './repositories/NotificationRepository';
 export * from './repositories/FileUploadRepository';
 export * from './repositories/UserSessionRepository';
 
-// Export services
-export * from './services/DatabaseService';
-export * from './services/AuthService';
 
 // Export repository instances for direct use
 export { userRepository } from './repositories/UserRepository';

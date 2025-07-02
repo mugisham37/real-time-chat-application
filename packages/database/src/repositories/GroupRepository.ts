@@ -22,8 +22,8 @@ export class GroupRepository {
             name: groupData.name,
             description: groupData.description,
             avatar: groupData.avatar,
-            creatorId: groupData.creatorId,
-            isPublic: groupData.isPublic ?? true,
+            createdById: groupData.creatorId,
+            isPrivate: !(groupData.isPublic ?? true),
             maxMembers: groupData.maxMembers ?? 100,
           },
         });
@@ -267,9 +267,16 @@ export class GroupRepository {
     }
   ): Promise<GroupWithDetails | null> {
     try {
+      // Transform isPublic to isPrivate for the database
+      const dbUpdateData: any = { ...updateData };
+      if (updateData.isPublic !== undefined) {
+        dbUpdateData.isPrivate = !updateData.isPublic;
+        delete dbUpdateData.isPublic;
+      }
+
       const updatedGroup = await prisma.group.update({
         where: { id },
-        data: updateData,
+        data: dbUpdateData,
         include: {
           createdBy: {
             select: {
@@ -411,7 +418,7 @@ export class GroupRepository {
         }
 
         // Don't allow removing the creator
-        if (group.creatorId === userId) {
+        if (group.createdById === userId) {
           throw new Error('Cannot remove the group creator');
         }
 
@@ -468,7 +475,7 @@ export class GroupRepository {
         }
 
         // Don't allow changing creator's role
-        if (group.creatorId === userId) {
+        if (group.createdById === userId) {
           throw new Error('Cannot change the creator\'s role');
         }
 
@@ -530,7 +537,7 @@ export class GroupRepository {
   /**
    * Get member role in group
    */
-  async getMemberRole(groupId: string, userId: string): Promise<'ADMIN' | 'MODERATOR' | 'MEMBER' | null> {
+  async getMemberRole(groupId: string, userId: string): Promise<'ADMIN' | 'MODERATOR' | 'MEMBER' | 'OWNER' | null> {
     try {
       const member = await prisma.groupMember.findUnique({
         where: {
@@ -563,7 +570,7 @@ export class GroupRepository {
       const { limit = 20, offset = 0, excludeUserGroups } = options;
 
       const whereClause: any = {
-        isPublic: true,
+        isPrivate: false,
         isActive: true,
         OR: [
           { name: { contains: query, mode: 'insensitive' } },
@@ -666,7 +673,9 @@ export class GroupRepository {
         prisma.message.count({
           where: {
             conversation: {
-              groupId,
+              group: {
+                id: groupId,
+              },
             },
             isDeleted: false,
           },
@@ -674,7 +683,9 @@ export class GroupRepository {
         prisma.message.findFirst({
           where: {
             conversation: {
-              groupId,
+              group: {
+                id: groupId,
+              },
             },
             isDeleted: false,
           },
@@ -776,11 +787,11 @@ export class GroupRepository {
     try {
       return await prisma.group.findMany({
         where: {
-          isPublic: true,
+          isPrivate: false,
           isActive: true,
         },
         include: {
-          creator: {
+          createdBy: {
             select: {
               id: true,
               username: true,
