@@ -1,7 +1,7 @@
 'use client';
 
 import { io, Socket } from 'socket.io-client';
-import { ServerToClientEvents, ClientToServerEvents } from '@chatapp/shared';
+import { ServerToClientEvents, ClientToServerEvents } from '../types/socket';
 
 class SocketManager {
   private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;

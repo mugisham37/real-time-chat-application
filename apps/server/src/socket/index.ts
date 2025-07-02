@@ -5,7 +5,7 @@ import { logger } from '../utils/logger';
 import { 
   ServerToClientEvents, 
   ClientToServerEvents 
-} from '@chatapp/shared';
+} from '../types/socket';
 
 export function setupSocketIO(httpServer: HTTPServer, redisClient: any) {
   const io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
