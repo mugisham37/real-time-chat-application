@@ -136,7 +136,7 @@ export const checkRedisHealth = async (): Promise<boolean> => {
 
 // Enhanced Redis operations with error handling and logging
 export class RedisManager {
-  private client: RedisClientType;
+  public client: RedisClientType;
 
   constructor(client: RedisClientType) {
     this.client = client;

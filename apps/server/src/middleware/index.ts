@@ -7,7 +7,7 @@
 export * from './errorHandler';
 
 // Authentication and authorization middleware
-export * from './auth.middleware';
+export * from './auth';
 
 // Validation middleware
 export * from './validation.middleware';
@@ -30,7 +30,7 @@ import {
   requireConversationAccess,
   requireGroupAccess,
   requireOwnership,
-} from './auth.middleware';
+} from './auth';
 
 import {
   validate,

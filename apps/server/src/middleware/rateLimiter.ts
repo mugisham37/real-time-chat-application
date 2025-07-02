@@ -13,10 +13,15 @@ class RedisStore {
   async increment(key: string, windowMs: number): Promise<{ totalHits: number; timeToExpire?: number }> {
     try {
       const redisKey = `${this.keyPrefix}${key}`;
-      const current = await this.redis.incr(redisKey, Math.ceil(windowMs / 1000));
+      const current = await this.redis.incr(redisKey);
+      
+      // Set TTL on first increment
+      if (current === 1) {
+        await this.redis.client.expire(`${config.cache.keyPrefix}${redisKey}`, Math.ceil(windowMs / 1000));
+      }
       
       // Get TTL for the key
-      const ttl = await this.redis.client.ttl(redisKey);
+      const ttl = await this.redis.client.ttl(`${config.cache.keyPrefix}${redisKey}`);
       
       return {
         totalHits: current,
@@ -34,7 +39,7 @@ class RedisStore {
       const redisKey = `${this.keyPrefix}${key}`;
       const current = await this.redis.get(redisKey);
       if (current && parseInt(current) > 0) {
-        await this.redis.client.decr(redisKey);
+        await this.redis.client.decr(`${config.cache.keyPrefix}${redisKey}`);
       }
     } catch (error) {
       logger.error('Redis rate limit decrement error:', error);
@@ -122,19 +127,8 @@ const createBaseRateLimiter = (options: {
       return skipSuccessfulRequests(req, res) || skipFailedRequests(req, res);
     }),
     handler: options.onLimitReached || createRateLimitHandler('general'),
-    store: config.cache.enabled ? {
-      incr: (key: string, cb: (err?: Error, result?: { totalHits: number; timeToExpire?: number }) => void) => {
-        redisStore.increment(key, options.windowMs)
-          .then(result => cb(undefined, result))
-          .catch(err => cb(err));
-      },
-      decrement: (key: string) => {
-        redisStore.decrement(key).catch(err => logger.error('Rate limit decrement error:', err));
-      },
-      resetKey: (key: string) => {
-        redisStore.resetKey(key).catch(err => logger.error('Rate limit reset error:', err));
-      },
-    } : undefined,
+    // Use default memory store for now, Redis integration can be added later
+    // store: undefined, // Uses default MemoryStore
   });
 };
 
@@ -264,7 +258,7 @@ export const bruteForceProtection = (options?: {
       // Store attempt count for failed login
       res.on('finish', async () => {
         if (res.statusCode === 401 || res.statusCode === 403) {
-          const newCount = await redis.incr(key, Math.ceil(blockDurationMs / 1000));
+          const newCount = await redis.incr(key);
           
           if (newCount === 1) {
             // Set expiration on first attempt
