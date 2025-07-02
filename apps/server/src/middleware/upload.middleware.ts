@@ -48,7 +48,7 @@ const createStorage = (destination: string) => {
 /**
  * File filter factory
  */
-const createFileFilter = (allowedTypes: string[]) => {
+const createFileFilter = (allowedTypes: readonly string[]) => {
   return (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
@@ -63,7 +63,7 @@ const createFileFilter = (allowedTypes: string[]) => {
  */
 const createUploadMiddleware = (options: {
   destination: string;
-  allowedTypes: string[];
+  allowedTypes: readonly string[];
   maxSize: number;
   maxFiles?: number;
 }) => {
