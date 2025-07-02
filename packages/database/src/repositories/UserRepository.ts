@@ -329,9 +329,9 @@ export class UserRepository {
         AND: [
           {
             OR: [
-              { username: { contains: query, mode: 'insensitive' } },
-              { firstName: { contains: query, mode: 'insensitive' } },
-              { lastName: { contains: query, mode: 'insensitive' } },
+              { username: { contains: query, mode: Prisma.QueryMode.insensitive } },
+              { firstName: { contains: query, mode: Prisma.QueryMode.insensitive } },
+              { lastName: { contains: query, mode: Prisma.QueryMode.insensitive } },
             ],
           },
           excludeUserIds.length > 0 ? { id: { notIn: excludeUserIds } } : {},

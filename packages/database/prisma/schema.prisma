@@ -3,7 +3,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -28,6 +27,8 @@ model User {
   // Authentication
   password     String
   emailVerified DateTime?
+  isActive     Boolean  @default(true)
+  isVerified   Boolean  @default(false)
   twoFactorEnabled Boolean @default(false)
   twoFactorSecret  String?
 
@@ -91,6 +92,7 @@ model Group {
   description    String?
   avatar         String?
   isPrivate      Boolean  @default(false)
+  isActive       Boolean  @default(true)
   maxMembers     Int      @default(100)
   createdById    String
   createdAt      DateTime @default(now())
@@ -220,7 +222,7 @@ model MessageAttachment {
 // File upload model
 model FileUpload {
   id           String   @id @default(cuid())
-  filename     String
+  filename     String   @unique
   originalName String
   mimeType     String
   size         Int
@@ -260,6 +262,7 @@ model UserSession {
   userId       String
   token        String   @unique
   refreshToken String?  @unique
+  deviceInfo   String?
   userAgent    String?
   ipAddress    String?
   isActive     Boolean  @default(true)

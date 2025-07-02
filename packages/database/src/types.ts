@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 
-// Extended user type with computed fields
+// User Types
 export type UserWithProfile = Prisma.UserGetPayload<{
   select: {
     id: true;
@@ -16,7 +16,30 @@ export type UserWithProfile = Prisma.UserGetPayload<{
   };
 }>;
 
-// Message with sender and reactions
+export type UserWithSessions = Prisma.UserGetPayload<{
+  include: {
+    userSessions: true;
+  };
+}>;
+
+export type UserWithRelations = Prisma.UserGetPayload<{
+  include: {
+    userSessions: true;
+    sentMessages: true;
+    conversations: {
+      include: {
+        conversation: true;
+      };
+    };
+    groupMemberships: {
+      include: {
+        group: true;
+      };
+    };
+  };
+}>;
+
+// Message Types
 export type MessageWithDetails = Prisma.MessageGetPayload<{
   include: {
     sender: {
@@ -56,7 +79,24 @@ export type MessageWithDetails = Prisma.MessageGetPayload<{
   };
 }>;
 
-// Conversation with participants and latest message
+export type MessageWithSender = Prisma.MessageGetPayload<{
+  include: {
+    sender: {
+      select: {
+        id: true;
+        username: true;
+        firstName: true;
+        lastName: true;
+        avatar: true;
+      };
+    };
+  };
+}>;
+
+export type CreateMessageData = Prisma.MessageCreateInput;
+export type UpdateMessageData = Prisma.MessageUpdateInput;
+
+// Conversation Types
 export type ConversationWithDetails = Prisma.ConversationGetPayload<{
   include: {
     participants: {
@@ -106,7 +146,75 @@ export type ConversationWithDetails = Prisma.ConversationGetPayload<{
   };
 }>;
 
-// Group with members and details
+export type ConversationWithParticipants = Prisma.ConversationGetPayload<{
+  include: {
+    participants: {
+      include: {
+        user: {
+          select: {
+            id: true;
+            username: true;
+            firstName: true;
+            lastName: true;
+            avatar: true;
+            isOnline: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
+export type ConversationWithMessages = Prisma.ConversationGetPayload<{
+  include: {
+    participants: {
+      include: {
+        user: {
+          select: {
+            id: true;
+            username: true;
+            firstName: true;
+            lastName: true;
+            avatar: true;
+          };
+        };
+      };
+    };
+    messages: {
+      include: {
+        sender: {
+          select: {
+            id: true;
+            username: true;
+            avatar: true;
+          };
+        };
+        reactions: {
+          include: {
+            user: {
+              select: {
+                id: true;
+                username: true;
+              };
+            };
+          };
+        };
+        attachments: {
+          include: {
+            fileUpload: true;
+          };
+        };
+      };
+      orderBy: {
+        createdAt: 'asc';
+      };
+    };
+  };
+}>;
+
+export type CreateConversationData = Prisma.ConversationCreateInput;
+
+// Group Types
 export type GroupWithMembers = Prisma.GroupGetPayload<{
   include: {
     members: {
@@ -142,7 +250,6 @@ export type GroupWithMembers = Prisma.GroupGetPayload<{
   };
 }>;
 
-// Group with full details including creator, members, and conversation
 export type GroupWithDetails = Prisma.GroupGetPayload<{
   include: {
     createdBy: {
@@ -188,6 +295,64 @@ export type GroupWithDetails = Prisma.GroupGetPayload<{
   };
 }>;
 
+export type CreateGroupData = Prisma.GroupCreateInput;
+export type UpdateGroupData = Prisma.GroupUpdateInput;
+
+// User Session Types
+export type UserSessionWithUser = Prisma.UserSessionGetPayload<{
+  include: {
+    user: {
+      select: {
+        id: true;
+        username: true;
+        firstName: true;
+        lastName: true;
+        avatar: true;
+        email: true;
+        isActive: true;
+        isVerified: true;
+      };
+    };
+  };
+}>;
+
+export type CreateUserSessionData = Prisma.UserSessionCreateInput;
+export type UpdateUserSessionData = Prisma.UserSessionUpdateInput;
+
+// Notification Types
+export type NotificationWithUser = Prisma.NotificationGetPayload<{
+  include: {
+    user: {
+      select: {
+        id: true;
+        username: true;
+        firstName: true;
+        lastName: true;
+        avatar: true;
+      };
+    };
+  };
+}>;
+
+export type CreateNotificationData = Prisma.NotificationCreateInput;
+
+// File Upload Types
+export type FileUploadWithUser = Prisma.FileUploadGetPayload<{
+  include: {
+    uploadedBy: {
+      select: {
+        id: true;
+        username: true;
+        firstName: true;
+        lastName: true;
+        avatar: true;
+      };
+    };
+  };
+}>;
+
+export type CreateFileUploadData = Prisma.FileUploadCreateInput;
+
 // Database connection status
 export interface DatabaseStatus {
   connected: boolean;
@@ -229,6 +394,19 @@ export interface SearchOptions {
   pagination?: PaginationOptions;
 }
 
+// Common utility types
+export type DatabaseError = {
+  code: string;
+  message: string;
+  meta?: any;
+};
+
+export type QueryResult<T> = {
+  success: boolean;
+  data?: T;
+  error?: DatabaseError;
+};
+
 // Notification payload types
 export interface NotificationPayload {
   MESSAGE: {
@@ -266,3 +444,14 @@ export interface NotificationPayload {
     action?: string;
   };
 }
+
+// Repository method result types
+export type RepositoryResult<T> = Promise<QueryResult<T>>;
+export type RepositoryListResult<T> = Promise<QueryResult<PaginatedResult<T>>>;
+
+// Batch operation types
+export type BatchResult = {
+  count: number;
+  success: boolean;
+  errors?: DatabaseError[];
+};

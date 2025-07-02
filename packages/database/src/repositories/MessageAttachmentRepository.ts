@@ -463,31 +463,37 @@ export class MessageAttachmentRepository {
         }
       }
 
-      const [totalAttachments, attachmentsByType, sizeStats] = await Promise.all([
-        prisma.messageAttachment.count({ where: whereClause }),
-        prisma.messageAttachment.groupBy({
-          by: ['fileUpload', 'mimeType'],
-          where: whereClause,
-          _count: true,
-        }),
-        prisma.messageAttachment.aggregate({
-          where: whereClause,
-          _sum: { fileUpload: { size: true } },
-          _avg: { fileUpload: { size: true } },
-        }),
-      ]);
+      // Get attachments with file upload data for manual calculation
+      const attachmentsWithFiles = await prisma.messageAttachment.findMany({
+        where: whereClause,
+        include: {
+          fileUpload: {
+            select: {
+              size: true,
+              mimeType: true,
+            },
+          },
+        },
+      });
 
-      const typeStats = attachmentsByType.reduce((acc: Record<string, number>, item: any) => {
-        const type = item.fileUpload?.mimeType?.split('/')[0] || 'other';
-        acc[type] = (acc[type] || 0) + item._count;
+      // Calculate statistics manually
+      const totalAttachments = attachmentsWithFiles.length;
+      const totalSize = attachmentsWithFiles.reduce((sum, attachment) => 
+        sum + (attachment.fileUpload?.size || 0), 0);
+      const averageSize = totalAttachments > 0 ? totalSize / totalAttachments : 0;
+
+      // Group by mime type
+      const attachmentsByType = attachmentsWithFiles.reduce((acc: Record<string, number>, attachment) => {
+        const type = attachment.fileUpload?.mimeType?.split('/')[0] || 'other';
+        acc[type] = (acc[type] || 0) + 1;
         return acc;
       }, {});
 
       return {
         totalAttachments,
-        attachmentsByType: typeStats,
-        totalSize: sizeStats._sum?.fileUpload?.size || 0,
-        averageSize: sizeStats._avg?.fileUpload?.size || 0,
+        attachmentsByType,
+        totalSize,
+        averageSize,
       };
     } catch (error) {
       throw new Error(`Error getting attachment stats: ${error instanceof Error ? error.message : 'Unknown error'}`);

@@ -31,4 +31,8 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
+// Export Prisma types for use in other files
+export * from '@prisma/client';
+export type { Prisma } from '@prisma/client';
+
 export default prisma;

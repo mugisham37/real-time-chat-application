@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../client';
 
 export class UserSessionRepository {
@@ -148,7 +148,7 @@ export class UserSessionRepository {
     try {
       const { limit = 20, offset = 0, includeInactive = false } = options;
 
-      const whereClause: any = { userId };
+      const whereClause: Prisma.UserSessionWhereInput = { userId };
 
       if (!includeInactive) {
         whereClause.isActive = true;
@@ -396,7 +396,7 @@ export class UserSessionRepository {
     try {
       const { limit = 20, offset = 0, activeOnly = true } = options;
 
-      const whereClause: any = { ipAddress };
+      const whereClause: Prisma.UserSessionWhereInput = { ipAddress };
 
       if (activeOnly) {
         whereClause.isActive = true;
@@ -466,7 +466,7 @@ export class UserSessionRepository {
    */
   async validateSession(token: string): Promise<{
     isValid: boolean;
-    session?: any;
+    session?: Awaited<ReturnType<UserSessionRepository['findByToken']>>;
     reason?: string;
   }> {
     try {

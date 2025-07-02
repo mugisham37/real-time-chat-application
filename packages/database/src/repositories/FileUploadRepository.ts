@@ -11,9 +11,8 @@ export class FileUploadRepository {
     mimeType: string;
     size: number;
     path: string;
-    url: string;
+    url?: string;
     uploadedById: string;
-    messageId?: string;
   }) {
     try {
       return await prisma.fileUpload.create({
@@ -28,11 +27,15 @@ export class FileUploadRepository {
               avatar: true,
             },
           },
-          message: {
-            select: {
-              id: true,
-              content: true,
-              createdAt: true,
+          attachments: {
+            include: {
+              message: {
+                select: {
+                  id: true,
+                  content: true,
+                  createdAt: true,
+                },
+              },
             },
           },
         },
@@ -59,11 +62,15 @@ export class FileUploadRepository {
               avatar: true,
             },
           },
-          message: {
-            select: {
-              id: true,
-              content: true,
-              createdAt: true,
+          attachments: {
+            include: {
+              message: {
+                select: {
+                  id: true,
+                  content: true,
+                  createdAt: true,
+                },
+              },
             },
           },
         },
@@ -90,11 +97,15 @@ export class FileUploadRepository {
               avatar: true,
             },
           },
-          message: {
-            select: {
-              id: true,
-              content: true,
-              createdAt: true,
+          attachments: {
+            include: {
+              message: {
+                select: {
+                  id: true,
+                  content: true,
+                  createdAt: true,
+                },
+              },
             },
           },
         },
@@ -148,11 +159,15 @@ export class FileUploadRepository {
               avatar: true,
             },
           },
-          message: {
-            select: {
-              id: true,
-              content: true,
-              createdAt: true,
+          attachments: {
+            include: {
+              message: {
+                select: {
+                  id: true,
+                  content: true,
+                  createdAt: true,
+                },
+              },
             },
           },
         },
@@ -171,7 +186,13 @@ export class FileUploadRepository {
   async getFilesByMessage(messageId: string) {
     try {
       return await prisma.fileUpload.findMany({
-        where: { messageId },
+        where: {
+          attachments: {
+            some: {
+              messageId,
+            },
+          },
+        },
         include: {
           uploadedBy: {
             select: {
@@ -180,6 +201,20 @@ export class FileUploadRepository {
               firstName: true,
               lastName: true,
               avatar: true,
+            },
+          },
+          attachments: {
+            where: {
+              messageId,
+            },
+            include: {
+              message: {
+                select: {
+                  id: true,
+                  content: true,
+                  createdAt: true,
+                },
+              },
             },
           },
         },
@@ -263,11 +298,15 @@ export class FileUploadRepository {
               avatar: true,
             },
           },
-          message: {
-            select: {
-              id: true,
-              content: true,
-              createdAt: true,
+          attachments: {
+            include: {
+              message: {
+                select: {
+                  id: true,
+                  content: true,
+                  createdAt: true,
+                },
+              },
             },
           },
         },
@@ -303,11 +342,15 @@ export class FileUploadRepository {
               avatar: true,
             },
           },
-          message: {
-            select: {
-              id: true,
-              content: true,
-              createdAt: true,
+          attachments: {
+            include: {
+              message: {
+                select: {
+                  id: true,
+                  content: true,
+                  createdAt: true,
+                },
+              },
             },
           },
         },
@@ -408,7 +451,9 @@ export class FileUploadRepository {
     try {
       const result = await prisma.fileUpload.deleteMany({
         where: {
-          messageId: null,
+          attachments: {
+            none: {},
+          },
           createdAt: {
             lt: new Date(Date.now() - 24 * 60 * 60 * 1000), // Older than 24 hours
           },
@@ -460,8 +505,8 @@ export class FileUploadRepository {
 
       const whereClause: any = {
         OR: [
-          { originalName: { contains: query, mode: 'insensitive' } },
-          { filename: { contains: query, mode: 'insensitive' } },
+          { originalName: { contains: query, mode: Prisma.QueryMode.insensitive } },
+          { filename: { contains: query, mode: Prisma.QueryMode.insensitive } },
         ],
       };
 
@@ -485,11 +530,15 @@ export class FileUploadRepository {
               avatar: true,
             },
           },
-          message: {
-            select: {
-              id: true,
-              content: true,
-              createdAt: true,
+          attachments: {
+            include: {
+              message: {
+                select: {
+                  id: true,
+                  content: true,
+                  createdAt: true,
+                },
+              },
             },
           },
         },
