@@ -1,10 +1,19 @@
-import type { Server as SocketIOServer, Socket } from "socket.io"
+import type { Server as SocketIOServer } from "socket.io"
 import { logger } from "../../utils/logger"
 import { getRedisManager } from "../../config/redis"
-import { validateSocketEvent } from "../utils/validateSocketEvent"
-import { messageEventSchema } from "../validators/messageEventSchema"
-import { messageEditSchema } from "../validators/messageEditSchema"
-import { messageReactionSchema } from "../validators/messageReactionSchema"
+import { validateZodEvent } from "../utils/validateZodEvent"
+import { 
+  messageEventSchema,
+  messageEditSchema,
+  messageReactionSchema
+} from "../validators/zodSchemas"
+import type { 
+  AuthenticatedSocket,
+  SendMessageData,
+  MessageReactionData,
+  SocketCallback,
+  SafeError
+} from "../../types/socketHandlers"
 
 // Import repositories - we'll need to create these imports based on the actual repository structure
 // For now, I'll create placeholder interfaces that match the expected repository pattern
@@ -34,14 +43,19 @@ const messageRepository: MessageRepository = {} as MessageRepository
 const conversationRepository: ConversationRepository = {} as ConversationRepository
 const groupRepository: GroupRepository = {} as GroupRepository
 
-export const setupMessageHandlers = (io: SocketIOServer, socket: Socket & { data: { user?: any } }) => {
+export const setupMessageHandlers = (io: SocketIOServer, socket: AuthenticatedSocket) => {
   const userId = socket.data.user?._id
 
+  if (!userId) {
+    logger.error('User ID not found in socket data')
+    return
+  }
+
   // Send a new message
-  socket.on("message:send", async (data, callback) => {
+  socket.on("message:send", async (data: any, callback: SocketCallback) => {
     try {
       // Validate event data
-      const validationResult = validateSocketEvent(messageEventSchema, data)
+      const validationResult = validateZodEvent(messageEventSchema, data)
       if (!validationResult.success) {
         return callback({
           success: false,
@@ -158,7 +172,7 @@ export const setupMessageHandlers = (io: SocketIOServer, socket: Socket & { data
   })
 
   // Mark message as read
-  socket.on("message:read", async (data, callback) => {
+  socket.on("message:read", async (data: any, callback: SocketCallback) => {
     try {
       const { messageId } = data
 
@@ -226,10 +240,10 @@ export const setupMessageHandlers = (io: SocketIOServer, socket: Socket & { data
   })
 
   // Edit message
-  socket.on("message:edit", async (data, callback) => {
+  socket.on("message:edit", async (data: any, callback: SocketCallback) => {
     try {
       // Validate event data
-      const validationResult = validateSocketEvent(messageEditSchema, data)
+      const validationResult = validateZodEvent(messageEditSchema, data)
       if (!validationResult.success) {
         return callback({
           success: false,
@@ -238,7 +252,14 @@ export const setupMessageHandlers = (io: SocketIOServer, socket: Socket & { data
         })
       }
 
-      const { messageId, content } = data
+      if (!validationResult.value) {
+        return callback({
+          success: false,
+          message: "Validation failed",
+        })
+      }
+
+      const { messageId, content } = validationResult.value
 
       try {
         // Edit message
@@ -284,7 +305,7 @@ export const setupMessageHandlers = (io: SocketIOServer, socket: Socket & { data
   })
 
   // Delete message
-  socket.on("message:delete", async (data, callback) => {
+  socket.on("message:delete", async (data: any, callback: SocketCallback) => {
     try {
       const { messageId } = data
 
@@ -348,10 +369,10 @@ export const setupMessageHandlers = (io: SocketIOServer, socket: Socket & { data
   })
 
   // Add reaction to message
-  socket.on("message:react", async (data, callback) => {
+  socket.on("message:react", async (data: any, callback: SocketCallback) => {
     try {
       // Validate event data
-      const validationResult = validateSocketEvent(messageReactionSchema, data)
+      const validationResult = validateZodEvent(messageReactionSchema, data)
       if (!validationResult.success) {
         return callback({
           success: false,
@@ -360,7 +381,14 @@ export const setupMessageHandlers = (io: SocketIOServer, socket: Socket & { data
         })
       }
 
-      const { messageId, reactionType } = data
+      if (!validationResult.value) {
+        return callback({
+          success: false,
+          message: "Validation failed",
+        })
+      }
+
+      const { messageId, reactionType } = validationResult.value
 
       try {
         // Add reaction
@@ -415,7 +443,7 @@ export const setupMessageHandlers = (io: SocketIOServer, socket: Socket & { data
   })
 
   // Get message history
-  socket.on("message:history", async (data, callback) => {
+  socket.on("message:history", async (data: any, callback: SocketCallback) => {
     try {
       const { conversationId, limit = 20, before } = data
 
@@ -506,7 +534,7 @@ export const setupMessageHandlers = (io: SocketIOServer, socket: Socket & { data
   })
 
   // Mark messages as delivered
-  socket.on("message:delivered", async (data, callback) => {
+  socket.on("message:delivered", async (data: any, callback: SocketCallback) => {
     try {
       const { messageIds } = data
 

@@ -1,9 +1,9 @@
-import Joi from "joi"
+import { z } from 'zod';
 
-export const messageEventSchema = Joi.object({
-  conversationId: Joi.string().required().messages({
-    "string.base": "Conversation ID must be a string",
-    "string.empty": "Conversation ID is required",
+export const messageEventSchema = z.object({
+  conversationId: z.string({
+    required_error: "Conversation ID is required",
+    invalid_type_error: "Conversation ID must be a string"
     "any.required": "Conversation ID is required",
   }),
   content: Joi.string().required().messages({

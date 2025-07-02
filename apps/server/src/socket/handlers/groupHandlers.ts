@@ -1,10 +1,26 @@
-import type { Server as SocketIOServer, Socket } from "socket.io"
+import type { Server as SocketIOServer } from "socket.io"
 import { logger } from "../../utils/logger"
-import { validateSocketEvent } from "../utils/validateSocketEvent"
-import { createGroupSchema } from "../validators/createGroupSchema"
-import { updateGroupSchema } from "../validators/updateGroupSchema"
-import { addMemberSchema } from "../validators/addMemberSchema"
-import { updateMemberRoleSchema } from "../validators/updateMemberRoleSchema"
+import { validateZodEvent } from "../utils/validateZodEvent"
+import { 
+  createGroupSchema,
+  updateGroupSchema,
+  addMemberSchema,
+  updateMemberRoleSchema
+} from "../validators/zodSchemas"
+import type { 
+  AuthenticatedSocket,
+  CreateGroupData,
+  UpdateGroupData,
+  AddMemberData,
+  UpdateMemberRoleData,
+  JoinGroupData,
+  LeaveGroupData,
+  DeleteGroupData,
+  RemoveMemberData,
+  SocketCallback,
+  SafeError,
+  GroupMember
+} from "../../types/socketHandlers"
 
 // Import repositories - we'll need to create these imports based on the actual repository structure
 // For now, I'll create placeholder interfaces that match the expected repository pattern
@@ -29,8 +45,13 @@ interface UserRepository {
 const groupRepository: GroupRepository = {} as GroupRepository
 const userRepository: UserRepository = {} as UserRepository
 
-export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: { user?: any } }) => {
+export const setupGroupHandlers = (io: SocketIOServer, socket: AuthenticatedSocket) => {
   const userId = socket.data.user?._id
+
+  if (!userId) {
+    logger.error('User ID not found in socket data')
+    return
+  }
 
   // Join user to their group rooms
   const joinUserGroups = async () => {
@@ -53,10 +74,10 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
   joinUserGroups()
 
   // Create a new group
-  socket.on("group:create", async (data, callback) => {
+  socket.on("group:create", async (data: any, callback: SocketCallback) => {
     try {
       // Validate event data
-      const validationResult = validateSocketEvent(createGroupSchema, data)
+      const validationResult = validateZodEvent(createGroupSchema, data)
       if (!validationResult.success) {
         return callback({
           success: false,
@@ -65,7 +86,14 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       }
 
-      const { name, description, members = [], isPublic = true } = data
+      if (!validationResult.value) {
+        return callback({
+          success: false,
+          message: "Validation failed",
+        })
+      }
+
+      const { name, description, members = [], isPublic = true } = validationResult.value
 
       try {
         // Validate members
@@ -116,9 +144,10 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       } catch (error) {
         logger.error("Error creating group:", error)
+        const errorMessage = error instanceof Error ? error.message : "Failed to create group"
         callback({
           success: false,
-          message: error.message || "Failed to create group",
+          message: errorMessage,
         })
       }
     } catch (error) {
@@ -162,7 +191,7 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         }
 
         // Check if user is already a member
-        const isMember = group.members.some((member) => member.user.toString() === userId.toString())
+        const isMember = group.members.some((member: any) => member.user.toString() === userId.toString())
 
         if (isMember) {
           return callback({
@@ -182,10 +211,10 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
           groupId,
           user: {
             _id: userId,
-            username: socket.data.user.username,
-            firstName: socket.data.user.firstName,
-            lastName: socket.data.user.lastName,
-            avatar: socket.data.user.avatar,
+            username: socket.data.user?.username,
+            firstName: socket.data.user?.firstName,
+            lastName: socket.data.user?.lastName,
+            avatar: socket.data.user?.avatar,
           },
         })
 
@@ -195,9 +224,10 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       } catch (error) {
         logger.error("Error joining group:", error)
+        const errorMessage = error instanceof Error ? error.message : "Failed to join group"
         callback({
           success: false,
-          message: error.message || "Failed to join group",
+          message: errorMessage,
         })
       }
     } catch (error) {
@@ -243,9 +273,10 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       } catch (error) {
         logger.error("Error leaving group:", error)
+        const errorMessage = error instanceof Error ? error.message : "Failed to leave group"
         callback({
           success: false,
-          message: error.message || "Failed to leave group",
+          message: errorMessage,
         })
       }
     } catch (error) {
@@ -261,7 +292,7 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
   socket.on("group:update", async (data, callback) => {
     try {
       // Validate event data
-      const validationResult = validateSocketEvent(updateGroupSchema, data)
+      const validationResult = validateZodEvent(updateGroupSchema, data)
       if (!validationResult.success) {
         return callback({
           success: false,
@@ -270,7 +301,14 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       }
 
-      const { groupId, name, description, avatar, isPublic, settings } = data
+      if (!validationResult.value) {
+        return callback({
+          success: false,
+          message: "Validation failed",
+        })
+      }
+
+      const { groupId, name, description, avatar, isPublic, settings } = validationResult.value
 
       try {
         // Update group
@@ -298,9 +336,10 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       } catch (error) {
         logger.error("Error updating group:", error)
+        const errorMessage = error instanceof Error ? error.message : "Failed to update group"
         callback({
           success: false,
-          message: error.message || "Failed to update group",
+          message: errorMessage,
         })
       }
     } catch (error) {
@@ -316,7 +355,7 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
   socket.on("group:add_member", async (data, callback) => {
     try {
       // Validate event data
-      const validationResult = validateSocketEvent(addMemberSchema, data)
+      const validationResult = validateZodEvent(addMemberSchema, data)
       if (!validationResult.success) {
         return callback({
           success: false,
@@ -325,7 +364,14 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       }
 
-      const { groupId, memberId } = data
+      if (!validationResult.value) {
+        return callback({
+          success: false,
+          message: "Validation failed",
+        })
+      }
+
+      const { groupId, memberId } = validationResult.value
 
       try {
         // Add member to group
@@ -369,9 +415,10 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       } catch (error) {
         logger.error("Error adding member to group:", error)
+        const errorMessage = error instanceof Error ? error.message : "Failed to add member to group"
         callback({
           success: false,
-          message: error.message || "Failed to add member to group",
+          message: errorMessage,
         })
       }
     } catch (error) {
@@ -423,9 +470,10 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       } catch (error) {
         logger.error("Error removing member from group:", error)
+        const errorMessage = error instanceof Error ? error.message : "Failed to remove member from group"
         callback({
           success: false,
-          message: error.message || "Failed to remove member from group",
+          message: errorMessage,
         })
       }
     } catch (error) {
@@ -441,7 +489,7 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
   socket.on("group:update_member_role", async (data, callback) => {
     try {
       // Validate event data
-      const validationResult = validateSocketEvent(updateMemberRoleSchema, data)
+      const validationResult = validateZodEvent(updateMemberRoleSchema, data)
       if (!validationResult.success) {
         return callback({
           success: false,
@@ -450,7 +498,14 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       }
 
-      const { groupId, memberId, role } = data
+      if (!validationResult.value) {
+        return callback({
+          success: false,
+          message: "Validation failed",
+        })
+      }
+
+      const { groupId, memberId, role } = validationResult.value
 
       try {
         // Update member role
@@ -476,9 +531,10 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       } catch (error) {
         logger.error("Error updating member role:", error)
+        const errorMessage = error instanceof Error ? error.message : "Failed to update member role"
         callback({
           success: false,
-          message: error.message || "Failed to update member role",
+          message: errorMessage,
         })
       }
     } catch (error) {
@@ -530,9 +586,10 @@ export const setupGroupHandlers = (io: SocketIOServer, socket: Socket & { data: 
         })
       } catch (error) {
         logger.error("Error deleting group:", error)
+        const errorMessage = error instanceof Error ? error.message : "Failed to delete group"
         callback({
           success: false,
-          message: error.message || "Failed to delete group",
+          message: errorMessage,
         })
       }
     } catch (error) {

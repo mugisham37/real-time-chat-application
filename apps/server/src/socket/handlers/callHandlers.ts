@@ -1,20 +1,37 @@
-import type { Server as SocketIOServer, Socket } from "socket.io"
+import type { Server as SocketIOServer } from "socket.io"
 import { logger } from "../../utils/logger"
-import { validateSocketEvent } from "../utils/validateSocketEvent"
-import { callOfferSchema } from "../validators/callOfferSchema"
-import { callAnswerSchema } from "../validators/callAnswerSchema"
-import { callIceCandidateSchema } from "../validators/callIceCandidateSchema"
+import { validateZodEvent } from "../utils/validateZodEvent"
+import { 
+  callOfferSchema, 
+  callAnswerSchema, 
+  callIceCandidateSchema,
+  callEndSchema 
+} from "../validators/zodSchemas"
 import { ChatMetrics } from "../../utils/metrics"
 import { getRedisManager } from "../../config/redis"
+import type { 
+  AuthenticatedSocket, 
+  CallOfferData, 
+  CallResponseData, 
+  IceCandidateData, 
+  CallEndData,
+  SocketCallback,
+  SafeError 
+} from "../../types/socketHandlers"
 
-export const setupCallHandlers = (io: SocketIOServer, socket: Socket & { data: { user?: any } }) => {
+export const setupCallHandlers = (io: SocketIOServer, socket: AuthenticatedSocket) => {
   const userId = socket.data.user?._id
 
+  if (!userId) {
+    logger.error('User ID not found in socket data')
+    return
+  }
+
   // Handle call offer
-  socket.on("call:offer", async (data, callback) => {
+  socket.on("call:offer", async (data, callback: SocketCallback) => {
     try {
       // Validate event data
-      const validationResult = validateSocketEvent(callOfferSchema, data)
+      const validationResult = validateZodEvent(callOfferSchema, data)
       if (!validationResult.success) {
         return callback({
           success: false,
@@ -23,7 +40,14 @@ export const setupCallHandlers = (io: SocketIOServer, socket: Socket & { data: {
         })
       }
 
-      const { recipientId, sdp, callType } = data
+      if (!validationResult.value) {
+        return callback({
+          success: false,
+          message: "Validation failed",
+        })
+      }
+
+      const { recipientId, sdp, callType } = validationResult.value
 
       // Check if recipient is online
       const recipientSockets = await io.in(`user:${recipientId}`).fetchSockets()
@@ -56,8 +80,8 @@ export const setupCallHandlers = (io: SocketIOServer, socket: Socket & { data: {
       io.to(`user:${recipientId}`).emit("call:incoming", {
         callId,
         callerId: userId,
-        callerName: socket.data.user.username,
-        callerAvatar: socket.data.user.avatar,
+        callerName: socket.data.user?.username,
+        callerAvatar: socket.data.user?.avatar,
         sdp,
         callType,
       })
@@ -81,10 +105,10 @@ export const setupCallHandlers = (io: SocketIOServer, socket: Socket & { data: {
   })
 
   // Handle call answer
-  socket.on("call:answer", async (data, callback) => {
+  socket.on("call:answer", async (data, callback: SocketCallback) => {
     try {
       // Validate event data
-      const validationResult = validateSocketEvent(callAnswerSchema, data)
+      const validationResult = validateZodEvent(callAnswerSchema, data)
       if (!validationResult.success) {
         return callback({
           success: false,
@@ -93,7 +117,14 @@ export const setupCallHandlers = (io: SocketIOServer, socket: Socket & { data: {
         })
       }
 
-      const { callId, sdp, accepted } = data
+      if (!validationResult.value) {
+        return callback({
+          success: false,
+          message: "Validation failed",
+        })
+      }
+
+      const { callId, sdp, accepted } = validationResult.value
 
       // Get call data from Redis
       const redisManager = getRedisManager()
@@ -151,10 +182,10 @@ export const setupCallHandlers = (io: SocketIOServer, socket: Socket & { data: {
   })
 
   // Handle ICE candidate
-  socket.on("call:ice_candidate", async (data, callback) => {
+  socket.on("call:ice_candidate", async (data, callback: SocketCallback) => {
     try {
       // Validate event data
-      const validationResult = validateSocketEvent(callIceCandidateSchema, data)
+      const validationResult = validateZodEvent(callIceCandidateSchema, data)
       if (!validationResult.success) {
         return callback({
           success: false,
@@ -163,7 +194,14 @@ export const setupCallHandlers = (io: SocketIOServer, socket: Socket & { data: {
         })
       }
 
-      const { callId, candidate } = data
+      if (!validationResult.value) {
+        return callback({
+          success: false,
+          message: "Validation failed",
+        })
+      }
+
+      const { callId, candidate } = validationResult.value
 
       // Get call data from Redis
       const redisManager = getRedisManager()
@@ -197,16 +235,26 @@ export const setupCallHandlers = (io: SocketIOServer, socket: Socket & { data: {
   })
 
   // Handle call end
-  socket.on("call:end", async (data, callback) => {
+  socket.on("call:end", async (data, callback: SocketCallback) => {
     try {
-      const { callId } = data
-
-      if (!callId) {
+      // Validate event data
+      const validationResult = validateZodEvent(callEndSchema, data)
+      if (!validationResult.success) {
         return callback({
           success: false,
-          message: "Call ID is required",
+          message: "Validation error",
+          errors: validationResult.errors,
         })
       }
+
+      if (!validationResult.value) {
+        return callback({
+          success: false,
+          message: "Validation failed",
+        })
+      }
+
+      const { callId } = validationResult.value
 
       // Get call data from Redis
       const redisManager = getRedisManager()

@@ -1,19 +1,21 @@
-import Joi from "joi"
+import { z } from 'zod';
 
-export const createGroupSchema = Joi.object({
-  name: Joi.string().required().messages({
-    "string.base": "Name must be a string",
-    "string.empty": "Name is required",
-    "any.required": "Name is required",
-  }),
-  description: Joi.string().allow("", null).messages({
-    "string.base": "Description must be a string",
-  }),
-  members: Joi.array().items(Joi.string()).messages({
-    "array.base": "Members must be an array",
-    "string.base": "Each member ID must be a string",
-  }),
-  isPublic: Joi.boolean().default(true).messages({
-    "boolean.base": "Is public must be a boolean",
-  }),
-})
+export const createGroupSchema = z.object({
+  name: z.string({
+    required_error: "Name is required",
+    invalid_type_error: "Name must be a string"
+  }).min(1, "Name is required"),
+  description: z.string({
+    invalid_type_error: "Description must be a string"
+  }).optional().nullable(),
+  members: z.array(z.string({
+    invalid_type_error: "Each member ID must be a string"
+  }), {
+    invalid_type_error: "Members must be an array"
+  }).optional(),
+  isPublic: z.boolean({
+    invalid_type_error: "Is public must be a boolean"
+  }).default(true)
+});
+
+export type CreateGroupData = z.infer<typeof createGroupSchema>;
