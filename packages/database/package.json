@@ -31,12 +31,14 @@
   "dependencies": {
     "@prisma/client": "^5.8.1",
     "bcryptjs": "^2.4.3",
-    "nanoid": "^5.0.4"
+    "nanoid": "^5.0.4",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "prisma": "^5.8.1",
     "tsx": "^4.7.0",
     "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.5",
     "typescript": "^5.3.3"
   },
   "prisma": {
