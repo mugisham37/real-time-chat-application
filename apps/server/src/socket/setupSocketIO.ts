@@ -27,7 +27,7 @@ export const setupSocketIO = (io: SocketIOServer): void => {
     io.of("/")
       .adapter.sockets(new Set())
       .then((sockets) => {
-        ChatMetrics.updateActiveConnections(sockets.size)
+        ChatMetrics.setActiveConnections(sockets.size)
       })
       .catch((err) => {
         logger.error("Error getting active sockets:", err)
@@ -49,7 +49,7 @@ export const setupSocketIO = (io: SocketIOServer): void => {
       io.of("/")
         .adapter.sockets(new Set())
         .then((sockets) => {
-          ChatMetrics.updateActiveConnections(sockets.size)
+          ChatMetrics.setActiveConnections(sockets.size)
         })
         .catch((err) => {
           logger.error("Error getting active sockets:", err)

@@ -242,6 +242,11 @@ export class RedisManager {
     }
   }
 
+  // Increment counter (alias for backward compatibility)
+  async increment(key: string, ttl?: number): Promise<number> {
+    return this.incr(key, ttl);
+  }
+
   // Set multiple keys
   async mset(keyValuePairs: Record<string, string>): Promise<boolean> {
     try {

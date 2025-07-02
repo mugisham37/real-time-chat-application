@@ -675,11 +675,15 @@ export const validateRefreshToken = async (token: string): Promise<RefreshTokenP
   }
 };
 
+// Socket.IO authentication middleware alias for backward compatibility
+export const verifySocketToken = authenticateSocket;
+
 // Export all authentication utilities
 export default {
   authenticate,
   optionalAuth,
   authenticateSocket,
+  verifySocketToken,
   authorize,
   requirePermission,
   requireOwnership,

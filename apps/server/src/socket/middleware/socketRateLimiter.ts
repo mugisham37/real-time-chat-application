@@ -50,7 +50,7 @@ export const socketRateLimiter = async (socket: Socket, next: (err?: ExtendedErr
     const originalEmit = socket.emit
     socket.emit = function (event, ...args) {
       if (event !== "error" && event !== "connect" && event !== "disconnect") {
-        redisManager.increment(key).catch((err) => {
+        redisManager.increment(key).catch((err: any) => {
           logger.error(`Error incrementing rate limit count for user ${userId}:`, err)
         })
       }

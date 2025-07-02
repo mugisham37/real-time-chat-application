@@ -31,7 +31,7 @@ export const initializeSocketIO = (httpServer: HttpServer): SocketIOServer => {
   // Create Socket.IO server with advanced configuration
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: config.corsOrigins || ["http://localhost:3000", "http://localhost:3001"],
+      origin: config.server.corsOrigin || ["http://localhost:3000", "http://localhost:3001"],
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -54,8 +54,6 @@ export const initializeSocketIO = (httpServer: HttpServer): SocketIOServer => {
     allowUpgrades: true,
     // Socket.IO path
     path: "/socket.io",
-    // Enable sticky sessions for horizontal scaling
-    sticky: true,
     // Connection state recovery
     connectionStateRecovery: {
       maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
@@ -222,7 +220,7 @@ export const initializeSocketIO = (httpServer: HttpServer): SocketIOServer => {
   // Log server initialization
   logger.info("Socket.IO server initialized successfully", {
     transports: ["websocket", "polling"],
-    cors: config.corsOrigins,
+    cors: config.server.corsOrigin,
     maxConnections: "unlimited",
     compression: "enabled",
   })
