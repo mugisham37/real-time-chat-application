@@ -357,8 +357,12 @@ export class ChatMetrics {
     metrics.incrementCounter('chat_calls_ended_total', { type });
   }
 
-  static recordCallDuration(duration: number, type: 'audio' | 'video'): void {
-    metrics.recordHistogram('chat_call_duration_seconds', duration, { type });
+  static incrementCallsRejected(type: 'audio' | 'video'): void {
+    metrics.incrementCounter('chat_calls_rejected_total', { type });
+  }
+
+  static recordCallDuration(type: 'audio' | 'video', duration: number): void {
+    metrics.recordHistogram('chat_call_duration_seconds', duration / 1000, { type });
   }
 
   // Search metrics
