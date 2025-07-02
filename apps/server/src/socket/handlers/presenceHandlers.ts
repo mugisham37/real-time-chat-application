@@ -359,7 +359,7 @@ export const setupPresenceHandlers = (io: SocketIOServer, socket: Socket & { dat
         const subscribers = await redisManager.sMembers(`user:presence:subscribers:${userId}`)
 
         // Broadcast offline status to subscribers
-        subscribers.forEach((subscriberId) => {
+        subscribers.forEach((subscriberId: string) => {
           io.to(`user:${subscriberId}`).emit("presence:offline", {
             userId: userId.toString(),
             lastSeen: new Date(),

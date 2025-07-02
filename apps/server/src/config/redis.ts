@@ -354,6 +354,391 @@ export class RedisManager {
       return false;
     }
   }
+
+  // ========================================
+  // HASH OPERATIONS
+  // ========================================
+
+  /**
+   * Set hash field value or multiple fields
+   * @param key - Hash key
+   * @param fieldOrHash - Field name or hash object
+   * @param value - Field value (when using single field)
+   * @returns Number of fields that were added
+   */
+  async hSet(key: string, field: string, value: string): Promise<number>;
+  async hSet(key: string, hash: Record<string, string>): Promise<number>;
+  async hSet(key: string, fieldOrHash: string | Record<string, string>, value?: string): Promise<number> {
+    try {
+      const prefixedKey = `${config.cache.keyPrefix}${key}`;
+      
+      if (typeof fieldOrHash === 'string' && value !== undefined) {
+        const result = await this.client.hSet(prefixedKey, fieldOrHash, value);
+        cacheLogger.debug(`Cache HSET: ${prefixedKey}.${fieldOrHash}`);
+        return result;
+      } else if (typeof fieldOrHash === 'object') {
+        const result = await this.client.hSet(prefixedKey, fieldOrHash);
+        cacheLogger.debug(`Cache HSET: ${prefixedKey} (${Object.keys(fieldOrHash).length} fields)`);
+        return result;
+      }
+      
+      throw new Error('Invalid hSet arguments');
+    } catch (error) {
+      cacheLogger.error(`Cache HSET failed for key ${key}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get all fields and values in a hash
+   * @param key - Hash key
+   * @returns Hash object with all fields and values
+   */
+  async hGetAll(key: string): Promise<Record<string, string>> {
+    try {
+      const prefixedKey = `${config.cache.keyPrefix}${key}`;
+      const result = await this.client.hGetAll(prefixedKey);
+      
+      cacheLogger.debug(`Cache HGETALL: ${prefixedKey} (${Object.keys(result).length} fields)`);
+      return result;
+    } catch (error) {
+      cacheLogger.error(`Cache HGETALL failed for key ${key}:`, error);
+      return {};
+    }
+  }
+
+  /**
+   * Get hash field value
+   * @param key - Hash key
+   * @param field - Field name
+   * @returns Field value or null if not exists
+   */
+  async hGet(key: string, field: string): Promise<string | null> {
+    try {
+      const prefixedKey = `${config.cache.keyPrefix}${key}`;
+      const result = await this.client.hGet(prefixedKey, field);
+      
+      cacheLogger.debug(`Cache HGET: ${prefixedKey}.${field} (${result ? 'HIT' : 'MISS'})`);
+      return result || null;
+    } catch (error) {
+      cacheLogger.error(`Cache HGET failed for key ${key}.${field}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Delete hash fields
+   * @param key - Hash key
+   * @param fields - Field names to delete
+   * @returns Number of fields that were removed
+   */
+  async hDel(key: string, ...fields: string[]): Promise<number> {
+    try {
+      const prefixedKey = `${config.cache.keyPrefix}${key}`;
+      const result = await this.client.hDel(prefixedKey, fields);
+      
+      cacheLogger.debug(`Cache HDEL: ${prefixedKey} (${fields.length} fields, ${result} removed)`);
+      return result;
+    } catch (error) {
+      cacheLogger.error(`Cache HDEL failed for key ${key}:`, error);
+      return 0;
+    }
+  }
+
+  // ========================================
+  // SET OPERATIONS
+  // ========================================
+
+  /**
+   * Add members to a set
+   * @param key - Set key
+   * @param members - Members to add
+   * @returns Number of elements that were added
+   */
+  async sAdd(key: string, ...members: string[]): Promise<number> {
+    try {
+      const prefixedKey = `${config.cache.keyPrefix}${key}`;
+      const result = await this.client.sAdd(prefixedKey, members);
+      
+      cacheLogger.debug(`Cache SADD: ${prefixedKey} (${members.length} members, ${result} added)`);
+      return result;
+    } catch (error) {
+      cacheLogger.error(`Cache SADD failed for key ${key}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Remove members from a set
+   * @param key - Set key
+   * @param members - Members to remove
+   * @returns Number of elements that were removed
+   */
+  async sRem(key: string, ...members: string[]): Promise<number> {
+    try {
+      const prefixedKey = `${config.cache.keyPrefix}${key}`;
+      const result = await this.client.sRem(prefixedKey, members);
+      
+      cacheLogger.debug(`Cache SREM: ${prefixedKey} (${members.length} members, ${result} removed)`);
+      return result;
+    } catch (error) {
+      cacheLogger.error(`Cache SREM failed for key ${key}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get all members in a set
+   * @param key - Set key
+   * @returns Array of set members
+   */
+  async sMembers(key: string): Promise<string[]> {
+    try {
+      const prefixedKey = `${config.cache.keyPrefix}${key}`;
+      const result = await this.client.sMembers(prefixedKey);
+      
+      cacheLogger.debug(`Cache SMEMBERS: ${prefixedKey} (${result.length} members)`);
+      return result;
+    } catch (error) {
+      cacheLogger.error(`Cache SMEMBERS failed for key ${key}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Get the number of members in a set
+   * @param key - Set key
+   * @returns Number of members in the set
+   */
+  async sCard(key: string): Promise<number> {
+    try {
+      const prefixedKey = `${config.cache.keyPrefix}${key}`;
+      const result = await this.client.sCard(prefixedKey);
+      
+      cacheLogger.debug(`Cache SCARD: ${prefixedKey} (${result} members)`);
+      return result;
+    } catch (error) {
+      cacheLogger.error(`Cache SCARD failed for key ${key}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Check if member is in a set
+   * @param key - Set key
+   * @param member - Member to check
+   * @returns 1 if member exists, 0 otherwise
+   */
+  async sIsMember(key: string, member: string): Promise<number> {
+    try {
+      const prefixedKey = `${config.cache.keyPrefix}${key}`;
+      const result = await this.client.sIsMember(prefixedKey, member);
+      
+      cacheLogger.debug(`Cache SISMEMBER: ${prefixedKey}.${member} (${result ? 'EXISTS' : 'NOT_EXISTS'})`);
+      return result ? 1 : 0;
+    } catch (error) {
+      cacheLogger.error(`Cache SISMEMBER failed for key ${key}.${member}:`, error);
+      return 0;
+    }
+  }
+
+  // ========================================
+  // KEY OPERATIONS
+  // ========================================
+
+  /**
+   * Delete one or more keys
+   * @param keys - Keys to delete
+   * @returns Number of keys that were removed
+   */
+  async delete(key: string): Promise<number>;
+  async delete(...keys: string[]): Promise<number>;
+  async delete(...keys: string[]): Promise<number> {
+    try {
+      const prefixedKeys = keys.map(key => `${config.cache.keyPrefix}${key}`);
+      const result = await this.client.del(prefixedKeys);
+      
+      cacheLogger.debug(`Cache DELETE: ${keys.length} keys (${result} deleted)`);
+      return result;
+    } catch (error) {
+      cacheLogger.error(`Cache DELETE failed for keys ${keys.join(', ')}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Find keys matching a pattern
+   * @param pattern - Pattern to match
+   * @returns Array of matching keys (without prefix)
+   */
+  async keys(pattern: string): Promise<string[]> {
+    try {
+      const prefixedPattern = `${config.cache.keyPrefix}${pattern}`;
+      const result = await this.client.keys(prefixedPattern);
+      
+      // Remove prefix from returned keys
+      const unprefixedKeys = result.map(key => key.replace(config.cache.keyPrefix, ''));
+      
+      cacheLogger.debug(`Cache KEYS: ${pattern} (${result.length} matches)`);
+      return unprefixedKeys;
+    } catch (error) {
+      cacheLogger.error(`Cache KEYS failed for pattern ${pattern}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Set key expiration time
+   * @param key - Key to set expiration
+   * @param seconds - Expiration time in seconds
+   * @returns 1 if timeout was set, 0 if key doesn't exist
+   */
+  async expire(key: string, seconds: number): Promise<number> {
+    try {
+      const prefixedKey = `${config.cache.keyPrefix}${key}`;
+      const result = await this.client.expire(prefixedKey, seconds);
+      
+      cacheLogger.debug(`Cache EXPIRE: ${prefixedKey} (${seconds}s, ${result ? 'SET' : 'FAILED'})`);
+      return result ? 1 : 0;
+    } catch (error) {
+      cacheLogger.error(`Cache EXPIRE failed for key ${key}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get key time to live
+   * @param key - Key to check
+   * @returns TTL in seconds, -1 if no expiration, -2 if key doesn't exist
+   */
+  async ttl(key: string): Promise<number> {
+    try {
+      const prefixedKey = `${config.cache.keyPrefix}${key}`;
+      const result = await this.client.ttl(prefixedKey);
+      
+      cacheLogger.debug(`Cache TTL: ${prefixedKey} (${result}s)`);
+      return result;
+    } catch (error) {
+      cacheLogger.error(`Cache TTL failed for key ${key}:`, error);
+      return -2;
+    }
+  }
+
+  // ========================================
+  // PUB/SUB OPERATIONS
+  // ========================================
+
+  /**
+   * Publish message to channel
+   * @param channel - Channel name
+   * @param message - Message to publish
+   * @returns Number of subscribers that received the message
+   */
+  async publish(channel: string, message: string): Promise<number> {
+    try {
+      const result = await this.client.publish(channel, message);
+      
+      cacheLogger.debug(`Cache PUBLISH: ${channel} (${result} subscribers)`);
+      return result;
+    } catch (error) {
+      cacheLogger.error(`Cache PUBLISH failed for channel ${channel}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Subscribe to channel
+   * @param channel - Channel name
+   * @param callback - Message callback function
+   */
+  async subscribe(channel: string, callback: (message: string) => void): Promise<void> {
+    try {
+      // Note: This is a simplified implementation
+      // In production, you might want to use a separate subscriber client
+      await this.client.subscribe(channel, callback);
+      
+      cacheLogger.debug(`Cache SUBSCRIBE: ${channel}`);
+    } catch (error) {
+      cacheLogger.error(`Cache SUBSCRIBE failed for channel ${channel}:`, error);
+    }
+  }
+
+  /**
+   * Unsubscribe from channel
+   * @param channel - Channel name
+   */
+  async unsubscribe(channel: string): Promise<void> {
+    try {
+      await this.client.unsubscribe(channel);
+      
+      cacheLogger.debug(`Cache UNSUBSCRIBE: ${channel}`);
+    } catch (error) {
+      cacheLogger.error(`Cache UNSUBSCRIBE failed for channel ${channel}:`, error);
+    }
+  }
+
+  // ========================================
+  // UTILITY OPERATIONS
+  // ========================================
+
+  /**
+   * Check if multiple keys exist
+   * @param keys - Keys to check
+   * @returns Number of existing keys
+   */
+  async existsMultiple(...keys: string[]): Promise<number> {
+    try {
+      const prefixedKeys = keys.map(key => `${config.cache.keyPrefix}${key}`);
+      const result = await this.client.exists(prefixedKeys);
+      
+      cacheLogger.debug(`Cache EXISTS: ${keys.length} keys (${result} exist)`);
+      return result;
+    } catch (error) {
+      cacheLogger.error(`Cache EXISTS failed for keys ${keys.join(', ')}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Ping Redis server
+   * @returns PONG response
+   */
+  async ping(): Promise<string> {
+    try {
+      const result = await this.client.ping();
+      return result;
+    } catch (error) {
+      cacheLogger.error('Cache PING failed:', error);
+      return 'ERROR';
+    }
+  }
+
+  /**
+   * Flush all keys in current database
+   * @returns OK if successful
+   */
+  async flushAll(): Promise<string> {
+    try {
+      const result = await this.client.flushAll();
+      cacheLogger.info('Cache FLUSHALL executed');
+      return result;
+    } catch (error) {
+      cacheLogger.error('Cache FLUSHALL failed:', error);
+      return 'ERROR';
+    }
+  }
+
+  /**
+   * Disconnect from Redis
+   */
+  async disconnect(): Promise<void> {
+    try {
+      await this.client.quit();
+      cacheLogger.info('Redis client disconnected');
+    } catch (error) {
+      cacheLogger.error('Error during Redis disconnect:', error);
+    }
+  }
 }
 
 // Create Redis manager instance
