@@ -13,6 +13,15 @@ export { callValidator, CallValidator } from './call.validator'
 export { contentModerationValidator, ContentModerationValidator } from './contentModeration.validator'
 export { conversationValidator, ConversationValidator } from './conversation.validator'
 export { e2eeValidator, E2EEValidator } from './e2ee.validator'
+export { fileManagementValidator, FileManagementValidator } from './fileManagement.validator'
+export { groupValidator, GroupValidator } from './group.validator'
+export { groupInvitationValidator, GroupInvitationValidator } from './groupInvitation.validator'
+export { groupJoinRequestValidator, GroupJoinRequestValidator } from './groupJoinRequest.validator'
+export { messageValidator, MessageValidator } from './message.validator'
+export { notificationValidator, NotificationValidator } from './notification.validator'
+export { presenceValidator, PresenceValidator } from './presence.validator'
+export { scheduledMessageValidator, ScheduledMessageValidator } from './scheduledMessage.validator'
+export { userValidator, UserValidator } from './user.validator'
 
 // Import validator instances
 import { analyticsValidator } from './analytics.validator'
@@ -21,6 +30,15 @@ import { callValidator } from './call.validator'
 import { contentModerationValidator } from './contentModeration.validator'
 import { conversationValidator } from './conversation.validator'
 import { e2eeValidator } from './e2ee.validator'
+import { fileManagementValidator } from './fileManagement.validator'
+import { groupValidator } from './group.validator'
+import { groupInvitationValidator } from './groupInvitation.validator'
+import { groupJoinRequestValidator } from './groupJoinRequest.validator'
+import { messageValidator } from './message.validator'
+import { notificationValidator } from './notification.validator'
+import { presenceValidator } from './presence.validator'
+import { scheduledMessageValidator } from './scheduledMessage.validator'
+import { userValidator } from './user.validator'
 
 // Validator types for type safety
 export type ValidatorInstance = 
@@ -30,6 +48,15 @@ export type ValidatorInstance =
   | typeof contentModerationValidator
   | typeof conversationValidator
   | typeof e2eeValidator
+  | typeof fileManagementValidator
+  | typeof groupValidator
+  | typeof groupInvitationValidator
+  | typeof groupJoinRequestValidator
+  | typeof messageValidator
+  | typeof notificationValidator
+  | typeof presenceValidator
+  | typeof scheduledMessageValidator
+  | typeof userValidator
 
 // Validators registry
 export const validators = {
@@ -38,7 +65,16 @@ export const validators = {
   call: callValidator,
   contentModeration: contentModerationValidator,
   conversation: conversationValidator,
-  e2ee: e2eeValidator
+  e2ee: e2eeValidator,
+  fileManagement: fileManagementValidator,
+  group: groupValidator,
+  groupInvitation: groupInvitationValidator,
+  groupJoinRequest: groupJoinRequestValidator,
+  message: messageValidator,
+  notification: notificationValidator,
+  presence: presenceValidator,
+  scheduledMessage: scheduledMessageValidator,
+  user: userValidator
 } as const
 
 // Validation middleware factory
@@ -66,6 +102,24 @@ export const createValidationMiddleware = (
       return conversationValidator.createConversationValidation(validationType as any)
     case 'e2ee':
       return e2eeValidator.createE2EEValidation(validationType as any)
+    case 'fileManagement':
+      return fileManagementValidator.createFileManagementValidation(validationType as any)
+    case 'group':
+      return groupValidator.createGroupValidation(validationType as any)
+    case 'groupInvitation':
+      return groupInvitationValidator.createInvitationValidation(validationType as any)
+    case 'groupJoinRequest':
+      return groupJoinRequestValidator.createJoinRequestValidation(validationType as any)
+    case 'message':
+      return messageValidator.createMessageValidation(validationType as any)
+    case 'notification':
+      return notificationValidator.createNotificationValidation(validationType as any)
+    case 'presence':
+      return presenceValidator.createPresenceValidation(validationType as any)
+    case 'scheduledMessage':
+      return scheduledMessageValidator.createScheduledMessageValidation(validationType as any)
+    case 'user':
+      return userValidator.createUserValidation(validationType as any)
     default:
       throw new Error(`Validation type ${validationType} not supported for ${validatorName}`)
   }
