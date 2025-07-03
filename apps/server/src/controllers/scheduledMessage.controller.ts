@@ -462,16 +462,20 @@ export class ScheduledMessageController extends BaseController {
 
     const query = this.getQueryParams(req, querySchema)
 
+    // Ensure values are defined (Zod defaults guarantee this, but TypeScript needs explicit handling)
+    const hours = query.hours ?? 24
+    const limit = query.limit ?? 10
+
     this.logAction('getUpcomingScheduledMessages', userId, {
-      hours: query.hours,
-      limit: query.limit
+      hours,
+      limit
     })
 
     const userMessages = await scheduledMessageService.getUserScheduledMessages(userId)
 
     // Filter for upcoming messages within the specified time frame
     const now = new Date()
-    const cutoffTime = new Date(now.getTime() + query.hours * 60 * 60 * 1000)
+    const cutoffTime = new Date(now.getTime() + hours * 60 * 60 * 1000)
 
     const upcomingMessages = userMessages
       .filter(msg => 
@@ -480,7 +484,7 @@ export class ScheduledMessageController extends BaseController {
         new Date(msg.scheduledFor) <= cutoffTime
       )
       .sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime())
-      .slice(0, query.limit)
+      .slice(0, limit)
 
     // Transform dates for response
     const transformedMessages = upcomingMessages.map(message => ({
@@ -494,7 +498,7 @@ export class ScheduledMessageController extends BaseController {
     this.sendSuccess(res, {
       messages: transformedMessages,
       count: transformedMessages.length,
-      timeFrame: `${query.hours} hours`
+      timeFrame: `${hours} hours`
     }, 'Upcoming scheduled messages retrieved successfully')
   })
 
