@@ -49,7 +49,7 @@ export class MessageService {
 
       // Encrypt message content if enabled
       let processedContent = content
-      if (config.encryption?.enabled && type === "TEXT") {
+      if (config.encryption.enabled && type === "TEXT") {
         processedContent = encrypt(content)
       }
 
@@ -58,13 +58,12 @@ export class MessageService {
         conversationId,
         senderId,
         content: processedContent,
-        type,
-        attachments: attachments || [],
-        mentions: mentions || [],
-        replyTo,
+        type: type as 'TEXT' | 'IMAGE' | 'FILE' | 'AUDIO' | 'VIDEO' | 'SYSTEM',
         metadata: metadata || {},
-        createdAt: new Date(),
-        updatedAt: new Date()
+        replyToId: replyTo,
+        attachments: attachments?.map(att => ({
+          fileUploadId: att.url // Using url as fileUploadId for now - you may need to adjust this
+        })) || []
       })
 
       // Cache message
@@ -121,7 +120,7 @@ export class MessageService {
       }
 
       // If message content is encrypted, decrypt it for the response
-      if (config.encryption?.enabled && type === "TEXT" && isEncrypted(message.content)) {
+      if (config.encryption?.enabled && type === "TEXT" && message.content && isEncrypted(message.content)) {
         message.content = decrypt(message.content)
       }
 
@@ -177,7 +176,7 @@ export class MessageService {
       }
 
       // Decrypt message content if encrypted
-      if (config.encryption?.enabled && message.type === "TEXT" && isEncrypted(message.content)) {
+      if (config.encryption.enabled && message.type === "TEXT" && message.content && isEncrypted(message.content)) {
         message.content = decrypt(message.content)
       }
 
@@ -234,10 +233,11 @@ export class MessageService {
 
       // Update message
       const updatedMessage = await messageRepository.update(id, {
-        ...updateData,
         content: processedContent || originalMessage.content,
-        updatedAt: new Date(),
-        isEdited: true
+        metadata: updateData.metadata,
+        isEdited: true,
+        editedAt: new Date(),
+        updatedAt: new Date()
       })
 
       if (!updatedMessage) {
@@ -248,7 +248,7 @@ export class MessageService {
       await this.cacheMessage(updatedMessage)
 
       // Decrypt content for response if encrypted
-      if (config.encryption?.enabled && updatedMessage.type === "TEXT" && isEncrypted(updatedMessage.content)) {
+      if (config.encryption?.enabled && updatedMessage.type === "TEXT" && updatedMessage.content && isEncrypted(updatedMessage.content)) {
         updatedMessage.content = decrypt(updatedMessage.content)
       }
 
@@ -329,8 +329,14 @@ export class MessageService {
       }
 
       // Add reaction
-      const updatedMessage = await messageRepository.addReaction(id, userId, reactionType)
+      const reactionAdded = await messageRepository.addReaction(id, userId, reactionType)
 
+      if (!reactionAdded) {
+        throw ApiError.badRequest("Failed to add reaction")
+      }
+
+      // Get updated message
+      const updatedMessage = await messageRepository.findById(id)
       if (!updatedMessage) {
         throw ApiError.notFound("Message not found")
       }
@@ -349,7 +355,7 @@ export class MessageService {
       }
 
       // Decrypt message content if encrypted
-      if (config.encryption?.enabled && updatedMessage.type === "TEXT" && isEncrypted(updatedMessage.content)) {
+      if (config.encryption?.enabled && updatedMessage.type === "TEXT" && updatedMessage.content && isEncrypted(updatedMessage.content)) {
         updatedMessage.content = decrypt(updatedMessage.content)
       }
 
@@ -374,8 +380,14 @@ export class MessageService {
       }
 
       // Remove reaction
-      const updatedMessage = await messageRepository.removeReaction(id, userId, reactionType)
+      const reactionRemoved = await messageRepository.removeReaction(id, userId, reactionType)
 
+      if (!reactionRemoved) {
+        throw ApiError.badRequest("Failed to remove reaction")
+      }
+
+      // Get updated message
+      const updatedMessage = await messageRepository.findById(id)
       if (!updatedMessage) {
         throw ApiError.notFound("Message not found")
       }
@@ -384,7 +396,7 @@ export class MessageService {
       await this.cacheMessage(updatedMessage)
 
       // Decrypt message content if encrypted
-      if (config.encryption?.enabled && updatedMessage.type === "TEXT" && isEncrypted(updatedMessage.content)) {
+      if (config.encryption?.enabled && updatedMessage.type === "TEXT" && updatedMessage.content && isEncrypted(updatedMessage.content)) {
         updatedMessage.content = decrypt(updatedMessage.content)
       }
 
@@ -418,7 +430,7 @@ export class MessageService {
       })
 
       // Decrypt message content if encrypted
-      if (config.encryption?.enabled && message.type === "TEXT" && isEncrypted(message.content)) {
+      if (config.encryption?.enabled && message.type === "TEXT" && message.content && isEncrypted(message.content)) {
         message.content = decrypt(message.content)
       }
 
@@ -479,7 +491,7 @@ export class MessageService {
       // Decrypt message contents if encrypted
       if (config.encryption?.enabled) {
         return messages.map((message) => {
-          if (message.type === "TEXT" && isEncrypted(message.content)) {
+          if (message.type === "TEXT" && message.content && isEncrypted(message.content)) {
             try {
               message.content = decrypt(message.content)
             } catch (error) {
@@ -591,7 +603,7 @@ export class MessageService {
       ] = await Promise.all([
         messageRepository.getMessageCountBySender(userId),
         messageRepository.getMessageCountByRecipient(userId),
-        messageRepository.getMessageCountByTypeForUser(userId),
+        messageRepository.getMessageCountByTypeForUser(userId, 'TEXT'),
         this.getUserMessagesByDay(userId, 30), // Last 30 days
         messageRepository.getMostActiveConversationForUser(userId),
         messageRepository.getFavoriteReactionForUser(userId)
@@ -604,11 +616,11 @@ export class MessageService {
       return {
         totalMessagesSent,
         totalMessagesReceived,
-        messagesByType,
+        messagesByType: { TEXT: messagesByType },
         messagesByDay,
         averageMessagesPerDay,
-        mostActiveConversation,
-        favoriteReaction
+        mostActiveConversation: mostActiveConversation || '',
+        favoriteReaction: favoriteReaction || ''
       }
     } catch (error) {
       logger.error(`Error getting message stats for user ${userId}:`, error)

@@ -195,6 +195,7 @@ export const config = {
   
   // Encryption
   encryption: {
+    enabled: env.ENABLE_MESSAGE_ENCRYPTION,
     secret: env.ENCRYPTION_SECRET || generateEncryptionSecret(),
     algorithm: 'aes-256-gcm' as const,
     keyDerivation: 'pbkdf2' as const,

@@ -947,6 +947,27 @@ export class ConversationRepository {
       throw new Error(`Error removing participant: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Update conversation's last message
+   */
+  async updateLastMessage(conversationId: string, messageId: string): Promise<void> {
+    try {
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: { 
+          updatedAt: new Date()
+          // Note: If you want to track lastMessageId, you'll need to add this field to your schema
+          // lastMessageId: messageId
+        }
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        throw new Error('Conversation not found');
+      }
+      throw new Error(`Error updating last message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
 
 // Export singleton instance
