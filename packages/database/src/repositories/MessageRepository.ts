@@ -16,6 +16,8 @@ export class MessageRepository {
     attachments?: Array<{
       fileUploadId: string;
     }>;
+    status?: 'PENDING' | 'SENT' | 'FAILED' | 'CANCELLED' | 'SCHEDULED';
+    scheduledFor?: Date;
   }): Promise<MessageWithDetails> {
     try {
       return await prisma.$transaction(async (tx: any) => {
@@ -28,6 +30,8 @@ export class MessageRepository {
             type: messageData.type || 'TEXT',
             metadata: messageData.metadata,
             replyToId: messageData.replyToId,
+            status: messageData.status || 'SENT',
+            scheduledFor: messageData.scheduledFor,
             attachments: messageData.attachments ? {
               create: messageData.attachments,
             } : undefined,
@@ -225,6 +229,8 @@ export class MessageRepository {
     isDeleted?: boolean;
     deletedAt?: Date;
     updatedAt?: Date;
+    status?: 'PENDING' | 'SENT' | 'FAILED' | 'CANCELLED' | 'SCHEDULED';
+    scheduledFor?: Date;
   }): Promise<MessageWithDetails | null> {
     try {
       return await prisma.message.update({
@@ -236,6 +242,8 @@ export class MessageRepository {
           editedAt: updateData.editedAt,
           isDeleted: updateData.isDeleted,
           deletedAt: updateData.deletedAt,
+          status: updateData.status,
+          scheduledFor: updateData.scheduledFor,
           updatedAt: updateData.updatedAt || new Date(),
         },
         include: {
@@ -1471,6 +1479,293 @@ export class MessageRepository {
       }
     } catch (error) {
       throw new Error(`Error bulk deleting messages: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Find scheduled messages by sender ID
+   */
+  async findScheduledBySenderId(senderId: string): Promise<MessageWithDetails[]> {
+    try {
+      return await prisma.message.findMany({
+        where: {
+          senderId,
+          status: 'SCHEDULED',
+          scheduledFor: {
+            not: null
+          }
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+          reactions: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+          attachments: {
+            include: {
+              fileUpload: true,
+            },
+          },
+          replyTo: {
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { scheduledFor: 'asc' },
+      });
+    } catch (error) {
+      throw new Error(`Error finding scheduled messages by sender: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Hard delete message (alias for hardDelete for compatibility)
+   */
+  async delete(id: string): Promise<boolean> {
+    return this.hardDelete(id);
+  }
+
+  /**
+   * Get scheduled message statistics for a user
+   */
+  async getScheduledMessageStats(userId: string): Promise<{
+    totalScheduled: number;
+    totalSent: number;
+    totalCancelled: number;
+    totalFailed: number;
+  }> {
+    try {
+      const stats = await prisma.message.groupBy({
+        by: ['status'],
+        where: {
+          senderId: userId,
+          scheduledFor: {
+            not: null
+          }
+        },
+        _count: {
+          status: true
+        }
+      });
+
+      const result = {
+        totalScheduled: 0,
+        totalSent: 0,
+        totalCancelled: 0,
+        totalFailed: 0,
+      };
+
+      stats.forEach(stat => {
+        switch (stat.status) {
+          case 'SCHEDULED':
+          case 'PENDING':
+            result.totalScheduled += stat._count.status;
+            break;
+          case 'SENT':
+            result.totalSent += stat._count.status;
+            break;
+          case 'CANCELLED':
+            result.totalCancelled += stat._count.status;
+            break;
+          case 'FAILED':
+            result.totalFailed += stat._count.status;
+            break;
+        }
+      });
+
+      return result;
+    } catch (error) {
+      throw new Error(`Error getting scheduled message stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Find all scheduled messages ready to be sent
+   */
+  async findAllScheduled(options: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+  } = {}): Promise<{
+    messages: MessageWithDetails[];
+    total: number;
+  }> {
+    try {
+      const { limit = 50, offset = 0, status } = options;
+
+      const whereClause: any = {
+        scheduledFor: {
+          not: null
+        }
+      };
+
+      if (status) {
+        whereClause.status = status;
+      } else {
+        whereClause.status = {
+          in: ['SCHEDULED', 'PENDING']
+        };
+      }
+
+      const [messages, total] = await Promise.all([
+        prisma.message.findMany({
+          where: whereClause,
+          include: {
+            sender: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+              },
+            },
+            attachments: {
+              include: {
+                fileUpload: true,
+              },
+            },
+            reactions: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                  },
+                },
+              },
+            },
+            replyTo: {
+              include: {
+                sender: {
+                  select: {
+                    id: true,
+                    username: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { scheduledFor: 'asc' },
+          take: limit,
+          skip: offset,
+        }),
+        prisma.message.count({ where: whereClause })
+      ]);
+
+      return { messages, total };
+    } catch (error) {
+      throw new Error(`Error finding all scheduled messages: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Delete old scheduled messages
+   */
+  async deleteOldScheduled(cutoffDate: Date): Promise<number> {
+    try {
+      const result = await prisma.message.deleteMany({
+        where: {
+          status: {
+            in: ['SENT', 'FAILED', 'CANCELLED']
+          },
+          scheduledFor: {
+            lt: cutoffDate
+          }
+        }
+      });
+
+      return result.count;
+    } catch (error) {
+      throw new Error(`Error deleting old scheduled messages: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Find scheduled messages by conversation ID
+   */
+  async findScheduledByConversationId(
+    conversationId: string,
+    options: {
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<MessageWithDetails[]> {
+    try {
+      const { limit = 20, offset = 0 } = options;
+
+      return await prisma.message.findMany({
+        where: {
+          conversationId,
+          status: {
+            in: ['SCHEDULED', 'PENDING']
+          },
+          scheduledFor: {
+            not: null
+          }
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+          reactions: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+          attachments: {
+            include: {
+              fileUpload: true,
+            },
+          },
+          replyTo: {
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { scheduledFor: 'asc' },
+        take: limit,
+        skip: offset,
+      });
+    } catch (error) {
+      throw new Error(`Error finding scheduled messages by conversation: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

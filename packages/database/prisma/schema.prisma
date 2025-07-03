@@ -178,19 +178,21 @@ model GroupJoinRequest {
 
 // Message model
 model Message {
-  id             String      @id @default(cuid())
+  id             String        @id @default(cuid())
   conversationId String
   senderId       String
   content        String?
-  type           MessageType @default(TEXT)
-  metadata       Json?       // For storing additional message data
-  isEdited       Boolean     @default(false)
+  type           MessageType   @default(TEXT)
+  metadata       Json?         // For storing additional message data
+  isEdited       Boolean       @default(false)
   editedAt       DateTime?
-  replyToId      String?     // For message replies
-  isDeleted      Boolean     @default(false)
+  replyToId      String?       // For message replies
+  isDeleted      Boolean       @default(false)
   deletedAt      DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  status         MessageStatus @default(SENT)     // For scheduled messages
+  scheduledFor   DateTime?                        // When message should be sent
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   // Relationships
   conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -359,6 +361,14 @@ enum MessageType {
   AUDIO
   VIDEO
   SYSTEM
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+  SCHEDULED
 }
 
 enum NotificationType {

@@ -59,7 +59,12 @@ export class ScheduledMessageService {
 
       // Create scheduled message
       const message = await messageRepository.create({
-        ...messageData,
+        conversationId: messageData.conversationId,
+        senderId: messageData.senderId,
+        content: messageData.content,
+        type: (messageData.type as 'TEXT' | 'IMAGE' | 'FILE' | 'AUDIO' | 'VIDEO' | 'SYSTEM') || 'TEXT',
+        replyToId: messageData.replyToId,
+        attachments: messageData.attachments?.map(att => ({ fileUploadId: att.url })),
         status: "SCHEDULED",
         scheduledFor,
       })

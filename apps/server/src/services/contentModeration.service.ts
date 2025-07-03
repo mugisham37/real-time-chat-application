@@ -462,9 +462,9 @@ export class ContentModerationService {
    * Delete message
    */
   private async deleteMessage(messageId: string): Promise<void> {
-    await messageRepository.update(messageId, "[Message deleted by moderation system]", {
-      deleted: true,
-      deletedBy: "system",
+    await messageRepository.update(messageId, {
+      content: "[Message deleted by moderation system]",
+      isDeleted: true,
       deletedAt: new Date()
     })
   }
