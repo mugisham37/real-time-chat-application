@@ -31,8 +31,8 @@ export class GroupJoinRequestService {
           
           for (const adminId of adminIds) {
             await notificationService.createNotification({
-              recipientId: adminId,
-              senderId: requestData.userId,
+              recipient: adminId,
+              sender: requestData.userId,
               type: "group_join_request",
               content: `A user has requested to join your group "${group.name}"`,
               relatedId: request.id,
@@ -109,8 +109,8 @@ export class GroupJoinRequestService {
       try {
         const group = await groupRepository.findById(request.groupId)
         await notificationService.createNotification({
-          recipientId: request.userId,
-          senderId: responderId,
+          recipient: request.userId,
+          sender: responderId,
           type: "group_join_approved",
           content: `Your request to join "${group?.name || "a group"}" has been approved`,
           relatedId: request.groupId,
@@ -143,8 +143,8 @@ export class GroupJoinRequestService {
       try {
         const group = await groupRepository.findById(request.groupId)
         await notificationService.createNotification({
-          recipientId: request.userId,
-          senderId: responderId,
+          recipient: request.userId,
+          sender: responderId,
           type: "group_join_rejected",
           content: `Your request to join "${group?.name || "a group"}" has been rejected`,
           relatedId: request.groupId,

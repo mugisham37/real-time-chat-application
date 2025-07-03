@@ -450,6 +450,301 @@ export class GroupJoinRequestRepository {
       throw new Error(`Error cleaning up old join requests: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  // Additional methods expected by the service
+
+  /**
+   * Find pending requests by group ID (wrapper for getPendingRequestsForGroup)
+   */
+  async findPendingByGroupId(groupId: string) {
+    try {
+      return await prisma.groupJoinRequest.findMany({
+        where: {
+          groupId,
+          status: 'PENDING',
+        },
+        include: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              avatar: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error) {
+      throw new Error(`Error getting pending requests for group: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Find pending requests by user ID
+   */
+  async findPendingByUserId(userId: string) {
+    try {
+      return await prisma.groupJoinRequest.findMany({
+        where: {
+          userId,
+          status: 'PENDING',
+        },
+        include: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              avatar: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error) {
+      throw new Error(`Error getting pending requests for user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update request status
+   */
+  async updateStatus(id: string, status: 'APPROVED' | 'REJECTED') {
+    try {
+      // Simple status update without permission checks for service layer use
+      const updatedRequest = await prisma.groupJoinRequest.update({
+        where: { id },
+        data: { status },
+        include: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              avatar: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+      });
+
+      // If approved, add user to group (simplified version without permission checks)
+      if (status === 'APPROVED') {
+        await prisma.$transaction(async (tx: any) => {
+          // Get group conversation
+          const group = await tx.group.findUnique({
+            where: { id: updatedRequest.groupId },
+            include: { conversation: { select: { id: true } } }
+          });
+
+          if (group) {
+            // Add user to group members
+            await tx.groupMember.create({
+              data: {
+                groupId: updatedRequest.groupId,
+                userId: updatedRequest.userId,
+                role: 'MEMBER',
+              },
+            });
+
+            // Add user to conversation participants
+            await tx.conversationParticipant.create({
+              data: {
+                conversationId: group.conversation.id,
+                userId: updatedRequest.userId,
+                role: 'MEMBER',
+              },
+            });
+          }
+        });
+      }
+
+      return updatedRequest;
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        throw new Error('Join request not found');
+      }
+      throw new Error(`Error updating join request status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Delete a join request by ID
+   */
+  async delete(id: string): Promise<boolean> {
+    try {
+      await prisma.groupJoinRequest.delete({
+        where: { id }
+      });
+      return true;
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        throw new Error('Join request not found');
+      }
+      throw new Error(`Error deleting join request: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Delete expired requests
+   */
+  async deleteExpired(): Promise<number> {
+    try {
+      const now = new Date();
+      const result = await prisma.groupJoinRequest.deleteMany({
+        where: {
+          AND: [
+            { status: 'PENDING' },
+            {
+              OR: [
+                { createdAt: { lt: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) } }, // 30 days old
+                { 
+                  // Add expiresAt field support if it exists in schema
+                  // expiresAt: { lt: now }
+                }
+              ]
+            }
+          ]
+        }
+      });
+      return result.count;
+    } catch (error) {
+      throw new Error(`Error deleting expired join requests: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get group statistics (wrapper for getGroupJoinRequestStats)
+   */
+  async getGroupStats(groupId: string): Promise<{
+    totalRequests: number;
+    totalApproved: number;
+    totalRejected: number;
+    totalPending: number;
+  }> {
+    const stats = await this.getGroupJoinRequestStats(groupId);
+    return {
+      totalRequests: stats.total,
+      totalApproved: stats.approved,
+      totalRejected: stats.rejected,
+      totalPending: stats.pending,
+    };
+  }
+
+  /**
+   * Get user statistics
+   */
+  async getUserStats(userId: string): Promise<{
+    totalSent: number;
+    totalApproved: number;
+    totalRejected: number;
+    totalPending: number;
+  }> {
+    try {
+      const [totalSent, totalApproved, totalRejected, totalPending] = await Promise.all([
+        prisma.groupJoinRequest.count({
+          where: { userId },
+        }),
+        prisma.groupJoinRequest.count({
+          where: { userId, status: 'APPROVED' },
+        }),
+        prisma.groupJoinRequest.count({
+          where: { userId, status: 'REJECTED' },
+        }),
+        prisma.groupJoinRequest.count({
+          where: { userId, status: 'PENDING' },
+        }),
+      ]);
+
+      return {
+        totalSent,
+        totalApproved,
+        totalRejected,
+        totalPending,
+      };
+    } catch (error) {
+      throw new Error(`Error getting user join request stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Find pending request by group and user
+   */
+  async findPendingByGroupAndUser(groupId: string, userId: string) {
+    try {
+      return await prisma.groupJoinRequest.findFirst({
+        where: {
+          groupId,
+          userId,
+          status: 'PENDING'
+        }
+      });
+    } catch (error) {
+      throw new Error(`Error finding pending request by group and user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Find request by group and user (any status)
+   */
+  async findByGroupAndUser(groupId: string, userId: string) {
+    try {
+      return await prisma.groupJoinRequest.findFirst({
+        where: {
+          groupId,
+          userId
+        },
+        include: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              avatar: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      throw new Error(`Error finding request by group and user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
 
 // Export singleton instance

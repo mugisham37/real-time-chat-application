@@ -330,6 +330,29 @@ export type GroupInvitationWithDetails = Prisma.GroupInvitationGetPayload<{
   };
 }>;
 
+// Group Join Request Types
+export type GroupJoinRequestWithDetails = Prisma.GroupJoinRequestGetPayload<{
+  include: {
+    group: {
+      select: {
+        id: true;
+        name: true;
+        description: true;
+        avatar: true;
+      };
+    };
+    user: {
+      select: {
+        id: true;
+        username: true;
+        firstName: true;
+        lastName: true;
+        avatar: true;
+      };
+    };
+  };
+}>;
+
 export type CreateGroupInvitationData = Prisma.GroupInvitationCreateInput;
 export type UpdateGroupInvitationData = Prisma.GroupInvitationUpdateInput;
 
