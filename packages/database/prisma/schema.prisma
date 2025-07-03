@@ -24,6 +24,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Additional user fields
+  status    String   @default("active") // "active", "away", "busy", "offline"
+  isDeleted Boolean  @default(false)
+
   // Authentication
   password     String
   emailVerified DateTime?
@@ -47,6 +51,12 @@ model User {
   messageReactions MessageReaction[]
   userSessions     UserSession[]
   fileUploads      FileUpload[]
+
+  // Contact and blocking relationships
+  contacts         Contact[] @relation("UserContacts")
+  contactOf        Contact[] @relation("ContactUser")
+  blockedUsers     Block[]   @relation("BlockingUser")
+  blockedByUsers   Block[]   @relation("BlockedUser")
 
   @@map("users")
 }
@@ -278,6 +288,37 @@ model UserSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_sessions")
+}
+
+// Contact model for user contacts
+model Contact {
+  id         String   @id @default(cuid())
+  userId     String
+  contactId  String
+  isFavorite Boolean  @default(false)
+  addedAt    DateTime @default(now())
+
+  // Relationships
+  user    User @relation("UserContacts", fields: [userId], references: [id], onDelete: Cascade)
+  contact User @relation("ContactUser", fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contactId])
+  @@map("contacts")
+}
+
+// Block model for user blocking
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  blockedAt DateTime @default(now())
+
+  // Relationships
+  blocker User @relation("BlockingUser", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("BlockedUser", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@map("blocks")
 }
 
 // Enums

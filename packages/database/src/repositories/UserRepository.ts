@@ -40,6 +40,9 @@ export class UserRepository {
           isOnline: true,
           lastSeen: true,
           createdAt: true,
+          updatedAt: true,
+          status: true,
+          isDeleted: true,
         },
       });
 
@@ -215,6 +218,10 @@ export class UserRepository {
     emailVerified: Date;
     twoFactorEnabled: boolean;
     twoFactorSecret: string;
+    status: string;
+    isDeleted: boolean;
+    isOnline: boolean;
+    lastSeen: Date;
   }>): Promise<UserWithProfile | null> {
     try {
       return await prisma.user.update({
@@ -231,6 +238,9 @@ export class UserRepository {
           isOnline: true,
           lastSeen: true,
           createdAt: true,
+          updatedAt: true,
+          status: true,
+          isDeleted: true,
         },
       });
     } catch (error: any) {
@@ -308,6 +318,9 @@ export class UserRepository {
           isOnline: true,
           lastSeen: true,
           createdAt: true,
+          updatedAt: true,
+          status: true,
+          isDeleted: true,
         },
       });
     } catch (error: any) {
@@ -355,6 +368,9 @@ export class UserRepository {
           isOnline: true,
           lastSeen: true,
           createdAt: true,
+          updatedAt: true,
+          status: true,
+          isDeleted: true,
         },
         take: limit,
         skip: offset,
@@ -523,6 +539,9 @@ export class UserRepository {
           isOnline: true,
           lastSeen: true,
           createdAt: true,
+          updatedAt: true,
+          status: true,
+          isDeleted: true,
         },
         orderBy: [
           { isOnline: 'desc' },
@@ -560,6 +579,9 @@ export class UserRepository {
           isOnline: true,
           lastSeen: true,
           createdAt: true,
+          updatedAt: true,
+          status: true,
+          isDeleted: true,
         },
         orderBy: { lastSeen: 'desc' },
         take: limit,
@@ -625,6 +647,151 @@ export class UserRepository {
         throw new Error('User not found');
       }
       throw new Error(`Error updating notification settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get user contacts
+   */
+  async getContacts(userId: string, limit = 50, skip = 0): Promise<any[]> {
+    try {
+      const contacts = await prisma.contact.findMany({
+        where: { userId },
+        include: {
+          contact: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+              bio: true,
+              status: true,
+              isOnline: true,
+              lastSeen: true,
+            },
+          },
+        },
+        orderBy: [
+          { isFavorite: 'desc' },
+          { addedAt: 'desc' },
+        ],
+        take: limit,
+        skip,
+      });
+
+      return contacts.map(contact => ({
+        ...contact.contact,
+        isFavorite: contact.isFavorite,
+        addedAt: contact.addedAt,
+      }));
+    } catch (error) {
+      throw new Error(`Error getting contacts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Add contact
+   */
+  async addContact(userId: string, contactId: string, favorite = false): Promise<void> {
+    try {
+      await prisma.contact.create({
+        data: {
+          userId,
+          contactId,
+          isFavorite: favorite,
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        throw new Error('Contact already exists');
+      }
+      throw new Error(`Error adding contact: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Remove contact
+   */
+  async removeContact(userId: string, contactId: string): Promise<boolean> {
+    try {
+      const result = await prisma.contact.deleteMany({
+        where: {
+          userId,
+          contactId,
+        },
+      });
+
+      return result.count > 0;
+    } catch (error) {
+      throw new Error(`Error removing contact: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Block user
+   */
+  async blockUser(blockerId: string, blockedId: string): Promise<void> {
+    try {
+      await prisma.block.create({
+        data: {
+          blockerId,
+          blockedId,
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        throw new Error('User is already blocked');
+      }
+      throw new Error(`Error blocking user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Unblock user
+   */
+  async unblockUser(blockerId: string, blockedId: string): Promise<boolean> {
+    try {
+      const result = await prisma.block.deleteMany({
+        where: {
+          blockerId,
+          blockedId,
+        },
+      });
+
+      return result.count > 0;
+    } catch (error) {
+      throw new Error(`Error unblocking user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get blocked users
+   */
+  async getBlockedUsers(userId: string): Promise<any[]> {
+    try {
+      const blocks = await prisma.block.findMany({
+        where: { blockerId: userId },
+        include: {
+          blocked: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+        orderBy: { blockedAt: 'desc' },
+      });
+
+      return blocks.map(block => ({
+        ...block.blocked,
+        blockedAt: block.blockedAt,
+      }));
+    } catch (error) {
+      throw new Error(`Error getting blocked users: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

@@ -182,7 +182,7 @@ export class UserService {
         return (cachedResults as any[]).filter(user => user.id !== currentUserId)
       }
 
-      const users = await userRepository.search(query, limit, skip)
+      const users = await userRepository.search(query, { limit, offset: skip })
 
       // Filter out current user and blocked users if requested
       let filteredUsers = users.filter(user => user.id !== currentUserId)
@@ -474,8 +474,7 @@ export class UserService {
       // This would need to be implemented to handle cascading deletes
       // For now, just mark as deleted
       await userRepository.update(userId, {
-        isDeleted: true,
-        deletedAt: new Date()
+        isDeleted: true
       })
 
       // Clear all caches for this user

@@ -13,6 +13,9 @@ export type UserWithProfile = Prisma.UserGetPayload<{
     isOnline: true;
     lastSeen: true;
     createdAt: true;
+    updatedAt: true;
+    status: true;
+    isDeleted: true;
   };
 }>;
 
@@ -410,6 +413,44 @@ export type FileUploadWithUser = Prisma.FileUploadGetPayload<{
 }>;
 
 export type CreateFileUploadData = Prisma.FileUploadCreateInput;
+
+// Contact Types
+export type ContactWithUser = Prisma.ContactGetPayload<{
+  include: {
+    contact: {
+      select: {
+        id: true;
+        username: true;
+        firstName: true;
+        lastName: true;
+        avatar: true;
+        bio: true;
+        status: true;
+        isOnline: true;
+        lastSeen: true;
+      };
+    };
+  };
+}>;
+
+export type CreateContactData = Prisma.ContactCreateInput;
+
+// Block Types
+export type BlockWithUser = Prisma.BlockGetPayload<{
+  include: {
+    blocked: {
+      select: {
+        id: true;
+        username: true;
+        firstName: true;
+        lastName: true;
+        avatar: true;
+      };
+    };
+  };
+}>;
+
+export type CreateBlockData = Prisma.BlockCreateInput;
 
 // Database connection status
 export interface DatabaseStatus {
