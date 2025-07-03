@@ -853,7 +853,7 @@ export class MessageRepository {
   /**
    * Mark messages as read by conversation
    */
-  async markAsReadByConversation(conversationId: string, userId: string): Promise<number> {
+  async markAsReadByConversation(conversationId: string, userId: string): Promise<void> {
     try {
       // Update the conversation participant's lastReadAt timestamp
       await prisma.conversationParticipant.update({
@@ -867,19 +867,6 @@ export class MessageRepository {
           lastReadAt: new Date(),
         },
       });
-
-      // Count how many messages were marked as read
-      const unreadCount = await prisma.message.count({
-        where: {
-          conversationId,
-          senderId: {
-            not: userId, // Don't count user's own messages
-          },
-          isDeleted: false,
-        },
-      });
-
-      return unreadCount;
     } catch (error) {
       throw new Error(`Error marking messages as read: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

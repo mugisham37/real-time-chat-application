@@ -349,7 +349,7 @@ export class ConversationRepository {
   /**
    * Add participant to conversation
    */
-  async addParticipant(conversationId: string, userId: string, role: 'MEMBER' | 'ADMIN' = 'MEMBER'): Promise<boolean> {
+  async addParticipant(conversationId: string, userId: string, role: 'MEMBER' | 'ADMIN' = 'MEMBER'): Promise<ConversationWithDetails | null> {
     try {
       // Check if conversation exists
       const conversation = await prisma.conversation.findUnique({
@@ -389,7 +389,8 @@ export class ConversationRepository {
         },
       });
 
-      return true;
+      // Return the updated conversation
+      return await this.findById(conversationId);
     } catch (error: any) {
       throw new Error(`Error adding participant: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -398,7 +399,7 @@ export class ConversationRepository {
   /**
    * Remove participant from conversation
    */
-  async removeParticipant(conversationId: string, userId: string): Promise<boolean> {
+  async removeParticipant(conversationId: string, userId: string): Promise<ConversationWithDetails | null> {
     try {
       // Check if conversation exists
       const conversation = await prisma.conversation.findUnique({
@@ -416,7 +417,7 @@ export class ConversationRepository {
       }
 
       // Remove participant
-      const result = await prisma.conversationParticipant.delete({
+      await prisma.conversationParticipant.delete({
         where: {
           conversationId_userId: {
             conversationId,
@@ -425,7 +426,8 @@ export class ConversationRepository {
         },
       });
 
-      return !!result;
+      // Return the updated conversation
+      return await this.findById(conversationId);
     } catch (error: any) {
       if (error?.code === 'P2025') {
         throw new Error('User is not a participant in this conversation');
@@ -749,7 +751,7 @@ export class ConversationRepository {
   /**
    * Search conversations
    */
-  async search(userId: string, query: string, limit = 10): Promise<ConversationWithDetails[]> {
+  async search(query: string, userId: string): Promise<ConversationWithDetails[]> {
     try {
       return await prisma.conversation.findMany({
         where: {
@@ -847,7 +849,7 @@ export class ConversationRepository {
           },
         },
         orderBy: { updatedAt: 'desc' },
-        take: limit,
+        take: 10,
       });
     } catch (error) {
       throw new Error(`Error searching conversations: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -905,6 +907,44 @@ export class ConversationRepository {
       return await this.getUserConversations(userId, { limit, offset: skip });
     } catch (error) {
       throw new Error(`Error finding conversations by user ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Add participant to conversation (returns updated conversation)
+   */
+  async addParticipantAndReturn(conversationId: string, userId: string, role: 'MEMBER' | 'ADMIN' = 'MEMBER'): Promise<ConversationWithDetails | null> {
+    try {
+      // Add participant using the existing method
+      const success = await this.addParticipant(conversationId, userId, role);
+      
+      if (success) {
+        // Return the updated conversation
+        return await this.findById(conversationId);
+      }
+      
+      return null;
+    } catch (error) {
+      throw new Error(`Error adding participant: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Remove participant from conversation (returns updated conversation)
+   */
+  async removeParticipantAndReturn(conversationId: string, userId: string): Promise<ConversationWithDetails | null> {
+    try {
+      // Remove participant using the existing method
+      const success = await this.removeParticipant(conversationId, userId);
+      
+      if (success) {
+        // Return the updated conversation
+        return await this.findById(conversationId);
+      }
+      
+      return null;
+    } catch (error) {
+      throw new Error(`Error removing participant: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

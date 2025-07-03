@@ -12,7 +12,7 @@
     "declaration": true,
     "declarationMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "../../",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": false,
@@ -20,17 +20,19 @@
     "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "baseUrl": "./",
+    "baseUrl": "../../",
     "paths": {
-      "@/*": ["src/*"],
-      "@/config/*": ["src/config/*"],
-      "@/controllers/*": ["src/controllers/*"],
-      "@/middleware/*": ["src/middleware/*"],
-      "@/routes/*": ["src/routes/*"],
-      "@/services/*": ["src/services/*"],
-      "@/utils/*": ["src/utils/*"],
-      "@/types/*": ["src/types/*"],
-      "@/socket/*": ["src/socket/*"]
+      "@/*": ["apps/server/src/*"],
+      "@/config/*": ["apps/server/src/config/*"],
+      "@/controllers/*": ["apps/server/src/controllers/*"],
+      "@/middleware/*": ["apps/server/src/middleware/*"],
+      "@/routes/*": ["apps/server/src/routes/*"],
+      "@/services/*": ["apps/server/src/services/*"],
+      "@/utils/*": ["apps/server/src/utils/*"],
+      "@/types/*": ["apps/server/src/types/*"],
+      "@/socket/*": ["apps/server/src/socket/*"],
+      "@chatapp/database": ["packages/database/src"],
+      "@chatapp/database/*": ["packages/database/src/*"]
     }
   },
   "include": [

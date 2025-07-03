@@ -21,6 +21,7 @@
     "db:studio": "cd ../../packages/database && npm run db:studio"
   },
   "dependencies": {
+    "@chatapp/database": "file:../../packages/database",
     "express": "^4.18.2",
     "socket.io": "^4.7.4",
     "@socket.io/redis-adapter": "^8.2.1",
