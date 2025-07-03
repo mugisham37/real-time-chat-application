@@ -11,6 +11,7 @@ export class NotificationRepository {
     title: string;
     message: string;
     data?: any;
+    isRead?: boolean;
   }) {
     try {
       return await prisma.notification.create({
@@ -289,6 +290,177 @@ export class NotificationRepository {
       return { count: result.count };
     } catch (error) {
       throw new Error(`Error cleaning up old notifications: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Find notifications by user ID with pagination and filtering
+   */
+  async findByUserId(
+    userId: string,
+    options: {
+      limit?: number;
+      offset?: number;
+      isRead?: boolean;
+      type?: string;
+    } = {}
+  ) {
+    try {
+      const { limit = 20, offset = 0, isRead, type } = options;
+
+      const whereClause: any = { userId };
+
+      if (isRead !== undefined) {
+        whereClause.isRead = isRead;
+      }
+
+      if (type) {
+        whereClause.type = type;
+      }
+
+      return await prisma.notification.findMany({
+        where: whereClause,
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      });
+    } catch (error) {
+      throw new Error(`Error finding notifications by user ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Count notifications by user ID with optional filtering
+   */
+  async countByUserId(
+    userId: string,
+    options: {
+      isRead?: boolean;
+      type?: string;
+    } = {}
+  ): Promise<number> {
+    try {
+      const { isRead, type } = options;
+
+      const whereClause: any = { userId };
+
+      if (isRead !== undefined) {
+        whereClause.isRead = isRead;
+      }
+
+      if (type) {
+        whereClause.type = type;
+      }
+
+      return await prisma.notification.count({
+        where: whereClause,
+      });
+    } catch (error) {
+      throw new Error(`Error counting notifications by user ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Count unread notifications by user ID
+   */
+  async countUnreadByUserId(userId: string): Promise<number> {
+    try {
+      return await prisma.notification.count({
+        where: {
+          userId,
+          isRead: false,
+        },
+      });
+    } catch (error) {
+      throw new Error(`Error counting unread notifications by user ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Mark all notifications as read by user ID
+   */
+  async markAllAsReadByUserId(userId: string): Promise<{ modifiedCount: number }> {
+    try {
+      const result = await prisma.notification.updateMany({
+        where: {
+          userId,
+          isRead: false,
+        },
+        data: {
+          isRead: true,
+          readAt: new Date(),
+        },
+      });
+
+      return { modifiedCount: result.count };
+    } catch (error) {
+      throw new Error(`Error marking all notifications as read by user ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Delete notification by ID and user ID
+   */
+  async deleteByIdAndUserId(id: string, userId: string): Promise<boolean> {
+    try {
+      await prisma.notification.delete({
+        where: {
+          id,
+          userId, // Ensure user can only delete their own notifications
+        },
+      });
+
+      return true;
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        return false; // Notification not found
+      }
+      throw new Error(`Error deleting notification by ID and user ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Delete all notifications by user ID
+   */
+  async deleteAllByUserId(userId: string): Promise<{ deletedCount: number }> {
+    try {
+      const result = await prisma.notification.deleteMany({
+        where: { userId },
+      });
+
+      return { deletedCount: result.count };
+    } catch (error) {
+      throw new Error(`Error deleting all notifications by user ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Delete notifications older than specified date
+   */
+  async deleteOlderThan(date: Date): Promise<{ deletedCount: number }> {
+    try {
+      const result = await prisma.notification.deleteMany({
+        where: {
+          createdAt: {
+            lt: date,
+          },
+        },
+      });
+
+      return { deletedCount: result.count };
+    } catch (error) {
+      throw new Error(`Error deleting notifications older than date: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

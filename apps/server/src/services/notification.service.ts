@@ -29,10 +29,12 @@ export class NotificationService {
 
       // Create notification
       const notification = await notificationRepository.create({
-        ...notificationData,
-        isRead: false,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        userId: notificationData.recipient,
+        type: notificationData.type as 'MESSAGE' | 'GROUP_INVITATION' | 'GROUP_JOIN_REQUEST' | 'MENTION' | 'REACTION' | 'SYSTEM',
+        title: notificationData.type,
+        message: notificationData.content,
+        data: notificationData.metadata,
+        isRead: false
       })
 
       // Cache notification
@@ -94,7 +96,7 @@ export class NotificationService {
 
       // Get notifications from database
       const [notifications, unreadCount, totalCount] = await Promise.all([
-        notificationRepository.findByUserId(userId, { limit, skip, isRead, type }),
+        notificationRepository.findByUserId(userId, { limit, offset: skip, isRead, type }),
         this.getUnreadCount(userId),
         notificationRepository.countByUserId(userId, { isRead, type })
       ])

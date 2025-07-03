@@ -72,6 +72,7 @@ export class UserRepository {
         twoFactorEnabled: true,
         createdAt: true,
         updatedAt: true,
+        notificationSettings: true,
       };
 
       if (includePassword) {
@@ -107,6 +108,7 @@ export class UserRepository {
         twoFactorEnabled: true,
         createdAt: true,
         updatedAt: true,
+        notificationSettings: true,
       };
 
       if (includePassword) {
@@ -142,6 +144,7 @@ export class UserRepository {
         twoFactorEnabled: true,
         createdAt: true,
         updatedAt: true,
+        notificationSettings: true,
       };
 
       if (includePassword) {
@@ -177,6 +180,7 @@ export class UserRepository {
         twoFactorEnabled: true,
         createdAt: true,
         updatedAt: true,
+        notificationSettings: true,
       };
 
       if (includePassword) {
@@ -562,6 +566,65 @@ export class UserRepository {
       });
     } catch (error) {
       throw new Error(`Error getting recently active users: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update notification settings for a user
+   */
+  async updateNotificationSettings(userId: string, settings: {
+    emailNotifications?: boolean;
+    pushNotifications?: boolean;
+    mentionNotifications?: boolean;
+    messageNotifications?: boolean;
+    groupInvitationNotifications?: boolean;
+    messages?: boolean;
+    mentions?: boolean;
+    reactions?: boolean;
+    calls?: boolean;
+    groups?: boolean;
+    email?: boolean;
+    push?: boolean;
+  }): Promise<any | null> {
+    try {
+      // First get the current user to merge settings
+      const currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { notificationSettings: true },
+      });
+
+      if (!currentUser) {
+        throw new Error('User not found');
+      }
+
+      // Merge current settings with new settings
+      const currentSettings = (currentUser.notificationSettings as any) || {};
+      const updatedSettings = { ...currentSettings, ...settings };
+
+      return await prisma.user.update({
+        where: { id: userId },
+        data: {
+          notificationSettings: updatedSettings,
+        },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          bio: true,
+          isOnline: true,
+          lastSeen: true,
+          createdAt: true,
+          notificationSettings: true,
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        throw new Error('User not found');
+      }
+      throw new Error(`Error updating notification settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

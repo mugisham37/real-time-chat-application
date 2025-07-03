@@ -31,6 +31,9 @@ model User {
   isVerified   Boolean  @default(false)
   twoFactorEnabled Boolean @default(false)
   twoFactorSecret  String?
+  
+  // Notification settings
+  notificationSettings Json?
 
   // Relationships
   sentMessages     Message[] @relation("MessageSender")
