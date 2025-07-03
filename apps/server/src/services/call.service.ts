@@ -4,6 +4,7 @@ import { ApiError } from "../utils/apiError"
 import { userRepository } from "@chatapp/database"
 import { notificationService } from "./notification.service"
 import { analyticsService } from "./analytics.service"
+import { NotificationBuilder } from "../utils/notificationBuilder"
 
 interface CallData {
   callId: string
@@ -120,15 +121,15 @@ export class CallService {
         metadata: { callType, callerId, callId }
       })
 
-      // Create notification for recipient
-      await notificationService.createNotification({
-        recipient: recipientId,
-        sender: callerId,
-        type: "incoming_call",
-        content: `Incoming ${callType} call from ${caller.username}`,
-        relatedId: callId,
-        relatedType: "Call"
-      })
+      // Create notification for recipient using NotificationBuilder
+      const incomingCallNotification = NotificationBuilder.createIncomingCallNotification(
+        callerId,
+        recipientId,
+        callType,
+        caller.username,
+        callId
+      )
+      await notificationService.createNotification(incomingCallNotification)
 
       logger.info(`Call initiated: ${callId}`, {
         caller: callerId,
@@ -353,19 +354,19 @@ export class CallService {
       // Remove from active calls
       await this.removeFromActiveCalls(callId)
 
-      // Create missed call notification
+      // Create missed call notification using NotificationBuilder
       try {
         const caller = await userRepository.findById(callData.caller)
 
         if (caller) {
-          await notificationService.createNotification({
-            recipient: callData.recipient,
-            sender: callData.caller,
-            type: "missed_call",
-            content: `You missed a ${callData.callType} call from ${caller.username}`,
-            relatedId: callId,
-            relatedType: "Call"
-          })
+          const missedCallNotification = NotificationBuilder.createMissedCallNotification(
+            callData.caller,
+            callData.recipient,
+            callData.callType,
+            caller.username,
+            callId
+          )
+          await notificationService.createNotification(missedCallNotification)
         }
       } catch (error) {
         logger.error(`Error creating notification for missed call ${callId}:`, error)

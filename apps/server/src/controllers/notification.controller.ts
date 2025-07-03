@@ -2,6 +2,8 @@ import { Request, Response } from 'express'
 import { z } from 'zod'
 import { BaseController } from './base.controller'
 import { notificationService } from '../services/notification.service'
+import { NotificationBuilder } from '../utils/notificationBuilder'
+import { validateNotificationData } from '../utils/typeGuards'
 
 /**
  * Notification Controller
@@ -198,31 +200,26 @@ export class NotificationController extends BaseController {
     const userId = this.getUserId(req)
     this.requireAdmin(req)
 
-    const bodySchema = z.object({
-      recipient: z.string().min(1, 'Recipient ID is required'),
-      type: z.string().min(1, 'Notification type is required'),
-      content: z.string().min(1, 'Content is required').max(500, 'Content too long'),
-      relatedId: z.string().optional(),
-      relatedType: z.string().optional(),
-      metadata: z.record(z.any()).optional()
-    })
-
-    const body = this.getBodyParams(req, bodySchema)
+    // Use NotificationBuilder for proper validation and type safety
+    const { recipient, type, content, relatedId, relatedType, metadata } = req.body
 
     this.logAction('createNotification', userId, {
-      recipient: body.recipient,
-      type: body.type
+      recipient,
+      type
     })
 
-    const notification = await notificationService.createNotification({
-      recipient: body.recipient,
+    // Validate and create notification using NotificationBuilder
+    const validatedNotificationData = NotificationBuilder.createCustomNotification({
+      recipient,
       sender: userId,
-      type: body.type,
-      content: body.content,
-      relatedId: body.relatedId,
-      relatedType: body.relatedType,
-      metadata: body.metadata
+      type,
+      content,
+      relatedId,
+      relatedType,
+      metadata
     })
+
+    const notification = await notificationService.createNotification(validatedNotificationData)
 
     // Transform notification for response
     const transformedNotification = {
@@ -375,13 +372,16 @@ export class NotificationController extends BaseController {
 
     this.logAction('testNotification', userId, { type: body.type })
 
-    const notification = await notificationService.createNotification({
+    // Use validateNotificationData for proper type safety
+    const validatedNotificationData = validateNotificationData({
       recipient: userId,
       sender: userId,
       type: body.type,
       content: body.content,
       metadata: { isTest: true }
     })
+
+    const notification = await notificationService.createNotification(validatedNotificationData)
 
     // Transform notification for response
     const transformedNotification = {

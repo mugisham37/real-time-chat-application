@@ -21,21 +21,29 @@ export class AnalyticsController extends BaseController {
       this.requireAdmin(req)
     }
 
-    const querySchema = z.object({
-      startTime: z.coerce.number().optional(),
-      endTime: z.coerce.number().optional(),
-      limit: z.coerce.number().default(100),
-      activityTypes: z.string().optional().transform(val => val ? val.split(',') : undefined)
-    })
+    // Manual validation to avoid Zod type issues with base controller
+    const startTime = req.query.startTime ? Number(req.query.startTime) : undefined
+    const endTime = req.query.endTime ? Number(req.query.endTime) : undefined
+    const limit = req.query.limit ? Math.min(100, Math.max(1, Number(req.query.limit))) : 100
+    const activityTypes = req.query.activityTypes ? 
+      String(req.query.activityTypes).split(',').map(s => s.trim()) : undefined
 
-    const query = this.getQueryParams(req, querySchema)
+    // Validate numbers if provided
+    if (startTime !== undefined && isNaN(startTime)) {
+      throw new Error('Invalid startTime parameter')
+    }
+    if (endTime !== undefined && isNaN(endTime)) {
+      throw new Error('Invalid endTime parameter')
+    }
+
+    const query = { startTime, endTime, limit, activityTypes }
 
     this.logAction('getUserActivity', userId, { targetUserId, query })
 
     const activities = await analyticsService.getUserActivity(targetUserId, {
       startTime: query.startTime,
       endTime: query.endTime,
-      limit: query.limit,
+      limit: limit,
       activityTypes: query.activityTypes
     })
 
@@ -55,12 +63,17 @@ export class AnalyticsController extends BaseController {
       this.requireAdmin(req)
     }
 
-    const querySchema = z.object({
-      days: z.coerce.number().default(30),
-      activityTypes: z.string().optional().transform(val => val ? val.split(',') : undefined)
-    })
+    // Manual validation to avoid Zod type issues with base controller
+    const days = req.query.days ? Math.max(1, Number(req.query.days)) : 30
+    const activityTypes = req.query.activityTypes ? 
+      String(req.query.activityTypes).split(',').map(s => s.trim()) : undefined
 
-    const query = this.getQueryParams(req, querySchema)
+    // Validate days parameter
+    if (req.query.days && isNaN(days)) {
+      throw new Error('Invalid days parameter')
+    }
+
+    const query = { days, activityTypes }
 
     this.logAction('getUserActivityCounts', userId, { targetUserId, query })
 
@@ -106,12 +119,17 @@ export class AnalyticsController extends BaseController {
     const userId = this.getUserId(req)
     this.requireAdmin(req)
 
-    const querySchema = z.object({
-      days: z.coerce.number().default(30),
-      activityTypes: z.string().optional().transform(val => val ? val.split(',') : undefined)
-    })
+    // Manual validation to avoid Zod type issues with base controller
+    const days = req.query.days ? Math.max(1, Number(req.query.days)) : 30
+    const activityTypes = req.query.activityTypes ? 
+      String(req.query.activityTypes).split(',').map(s => s.trim()) : undefined
 
-    const query = this.getQueryParams(req, querySchema)
+    // Validate days parameter
+    if (req.query.days && isNaN(days)) {
+      throw new Error('Invalid days parameter')
+    }
+
+    const query = { days, activityTypes }
 
     this.logAction('getGlobalActivityCounts', userId, { query })
 

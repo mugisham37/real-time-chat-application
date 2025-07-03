@@ -4,6 +4,7 @@ import { ApiError } from "../utils/apiError"
 import { userRepository, messageRepository } from "@chatapp/database"
 import { notificationService } from "./notification.service"
 import { analyticsService } from "./analytics.service"
+import { NotificationBuilder } from "../utils/notificationBuilder"
 
 interface ModerationRule {
   id: string
@@ -446,12 +447,14 @@ export class ContentModerationService {
    * Warn user
    */
   private async warnUser(userId: string, reason: string): Promise<void> {
-    await notificationService.createNotification({
-      recipient: userId,
-      type: "system",
-      content: `Warning: ${reason}. Please follow community guidelines.`,
-      metadata: { type: "moderation_warning", reason }
-    })
+    const warningNotification = NotificationBuilder.createSystemNotification(
+      userId,
+      `Warning: ${reason}. Please follow community guidelines.`,
+      undefined,
+      undefined,
+      { type: "moderation_warning", reason }
+    )
+    await notificationService.createNotification(warningNotification)
 
     // Increment warning count
     await this.redis.incr(`moderation:warnings:${userId}`)
@@ -477,12 +480,14 @@ export class ContentModerationService {
     
     await this.redis.set(`moderation:muted:${userId}`, "true", durationMinutes * 60)
     
-    await notificationService.createNotification({
-      recipient: userId,
-      type: "system",
-      content: `You have been muted for ${durationMinutes} minutes due to policy violation.`,
-      metadata: { type: "moderation_mute", duration: durationMinutes, expiresAt }
-    })
+    const muteNotification = NotificationBuilder.createSystemNotification(
+      userId,
+      `You have been muted for ${durationMinutes} minutes due to policy violation.`,
+      undefined,
+      undefined,
+      { type: "moderation_mute", duration: durationMinutes, expiresAt }
+    )
+    await notificationService.createNotification(muteNotification)
   }
 
   /**
@@ -501,12 +506,14 @@ export class ContentModerationService {
       bannedBy: "system"
     }), 86400 * 365) // 1 year
 
-    await notificationService.createNotification({
-      recipient: userId,
-      type: "system",
-      content: `Your account has been suspended due to: ${reason}`,
-      metadata: { type: "moderation_ban", reason }
-    })
+    const banNotification = NotificationBuilder.createSystemNotification(
+      userId,
+      `Your account has been suspended due to: ${reason}`,
+      undefined,
+      undefined,
+      { type: "moderation_ban", reason }
+    )
+    await notificationService.createNotification(banNotification)
   }
 
   /**
@@ -518,12 +525,14 @@ export class ContentModerationService {
     // Notify moderators
     const moderators = await this.getModerators()
     for (const moderator of moderators) {
-      await notificationService.createNotification({
-        recipient: moderator.id,
-        type: "system",
-        content: "New content flagged for review",
-        metadata: { type: "moderation_review", actionId: moderationAction.id }
-      })
+      const reviewNotification = NotificationBuilder.createSystemNotification(
+        moderator.id,
+        "New content flagged for review",
+        moderationAction.id,
+        "ModerationAction",
+        { type: "moderation_review", actionId: moderationAction.id }
+      )
+      await notificationService.createNotification(reviewNotification)
     }
   }
 
