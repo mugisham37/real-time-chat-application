@@ -85,16 +85,7 @@ export class GroupInvitationService {
    */
   async acceptInvitation(id: string, userId: string): Promise<GroupInvitationWithDetails> {
     try {
-      const invitation = await groupInvitationRepository.updateStatus(id, "ACCEPTED")
-
-      if (!invitation) {
-        throw ApiError.notFound("Invitation not found")
-      }
-
-      if (invitation.inviteeId !== userId) {
-        throw ApiError.forbidden("You can only accept your own invitations")
-      }
-
+      const invitation = await groupInvitationRepository.acceptInvitation(id, userId)
       return invitation
     } catch (error) {
       logger.error(`Error accepting invitation ${id}:`, error)
@@ -107,16 +98,7 @@ export class GroupInvitationService {
    */
   async rejectInvitation(id: string, userId: string): Promise<GroupInvitationWithDetails> {
     try {
-      const invitation = await groupInvitationRepository.updateStatus(id, "REJECTED")
-
-      if (!invitation) {
-        throw ApiError.notFound("Invitation not found")
-      }
-
-      if (invitation.inviteeId !== userId) {
-        throw ApiError.forbidden("You can only reject your own invitations")
-      }
-
+      const invitation = await groupInvitationRepository.declineInvitation(id, userId)
       return invitation
     } catch (error) {
       logger.error(`Error rejecting invitation ${id}:`, error)
@@ -129,17 +111,7 @@ export class GroupInvitationService {
    */
   async cancelInvitation(id: string, userId: string): Promise<boolean> {
     try {
-      const invitation = await groupInvitationRepository.findById(id)
-
-      if (!invitation) {
-        throw ApiError.notFound("Invitation not found")
-      }
-
-      if (invitation.inviterId !== userId) {
-        throw ApiError.forbidden("You can only cancel your own invitations")
-      }
-
-      return await groupInvitationRepository.delete(id)
+      return await groupInvitationRepository.cancelInvitation(id, userId)
     } catch (error) {
       logger.error(`Error canceling invitation ${id}:`, error)
       throw error

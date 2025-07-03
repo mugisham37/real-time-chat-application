@@ -1,5 +1,6 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, InvitationStatus } from '@prisma/client';
 import { prisma } from '../client';
+import type { GroupInvitationWithDetails } from '../types';
 
 export class GroupInvitationRepository {
   /**
@@ -7,13 +8,13 @@ export class GroupInvitationRepository {
    */
   async create(invitationData: {
     groupId: string;
-    senderId: string;
-    receiverId: string;
+    inviterId: string;
+    inviteeId: string;
     message?: string;
     expiresAt?: Date;
-  }) {
+  }): Promise<GroupInvitationWithDetails> {
     try {
-      return await prisma.$transaction(async (tx: any) => {
+      return await prisma.$transaction(async (tx) => {
         // Check if group exists
         const group = await tx.group.findUnique({
           where: { id: invitationData.groupId },
@@ -28,12 +29,12 @@ export class GroupInvitationRepository {
           throw new Error('Cannot invite to inactive group');
         }
 
-        // Check if receiver is already a member
+        // Check if invitee is already a member
         const existingMember = await tx.groupMember.findUnique({
           where: {
             groupId_userId: {
               groupId: invitationData.groupId,
-              userId: invitationData.receiverId,
+              userId: invitationData.inviteeId,
             },
           },
         });
@@ -45,9 +46,9 @@ export class GroupInvitationRepository {
         // Check if invitation already exists
         const existingInvitation = await tx.groupInvitation.findUnique({
           where: {
-            groupId_receiverId: {
+            groupId_inviteeId: {
               groupId: invitationData.groupId,
-              receiverId: invitationData.receiverId,
+              inviteeId: invitationData.inviteeId,
             },
           },
         });
@@ -71,7 +72,7 @@ export class GroupInvitationRepository {
                 avatar: true,
               },
             },
-            sender: {
+            inviter: {
               select: {
                 id: true,
                 username: true,
@@ -80,7 +81,7 @@ export class GroupInvitationRepository {
                 avatar: true,
               },
             },
-            receiver: {
+            invitee: {
               select: {
                 id: true,
                 username: true,
@@ -105,7 +106,7 @@ export class GroupInvitationRepository {
   /**
    * Find invitation by ID
    */
-  async findById(id: string) {
+  async findById(id: string): Promise<GroupInvitationWithDetails | null> {
     try {
       return await prisma.groupInvitation.findUnique({
         where: { id },
@@ -118,7 +119,7 @@ export class GroupInvitationRepository {
               avatar: true,
             },
           },
-          sender: {
+          inviter: {
             select: {
               id: true,
               username: true,
@@ -127,7 +128,7 @@ export class GroupInvitationRepository {
               avatar: true,
             },
           },
-          receiver: {
+          invitee: {
             select: {
               id: true,
               username: true,
@@ -144,17 +145,18 @@ export class GroupInvitationRepository {
   }
 
   /**
-   * Get pending invitations for a user
+   * Find pending invitations by invitee ID
    */
-  async getPendingInvitationsForUser(userId: string) {
+  async findPendingByInviteeId(inviteeId: string): Promise<GroupInvitationWithDetails[]> {
     try {
       return await prisma.groupInvitation.findMany({
         where: {
-          receiverId: userId,
-          status: 'PENDING',
-          expiresAt: {
-            gt: new Date(),
-          },
+          inviteeId,
+          status: InvitationStatus.PENDING,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ],
         },
         include: {
           group: {
@@ -163,10 +165,18 @@ export class GroupInvitationRepository {
               name: true,
               description: true,
               avatar: true,
-              isActive: true,
             },
           },
-          sender: {
+          inviter: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+          invitee: {
             select: {
               id: true,
               username: true,
@@ -179,8 +189,330 @@ export class GroupInvitationRepository {
         orderBy: { createdAt: 'desc' },
       });
     } catch (error) {
-      throw new Error(`Error getting pending invitations for user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Error finding pending invitations by invitee ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  /**
+   * Find pending invitations by group ID
+   */
+  async findPendingByGroupId(groupId: string): Promise<GroupInvitationWithDetails[]> {
+    try {
+      return await prisma.groupInvitation.findMany({
+        where: {
+          groupId,
+          status: InvitationStatus.PENDING,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ],
+        },
+        include: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              avatar: true,
+            },
+          },
+          inviter: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+          invitee: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error) {
+      throw new Error(`Error finding pending invitations by group ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Find pending invitation by group and user
+   */
+  async findPendingByGroupAndUser(groupId: string, userId: string): Promise<GroupInvitationWithDetails | null> {
+    try {
+      return await prisma.groupInvitation.findFirst({
+        where: {
+          groupId,
+          inviteeId: userId,
+          status: InvitationStatus.PENDING,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ],
+        },
+        include: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              avatar: true,
+            },
+          },
+          inviter: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+          invitee: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      throw new Error(`Error finding pending invitation by group and user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Find any invitation by group and user
+   */
+  async findByGroupAndUser(groupId: string, userId: string): Promise<GroupInvitationWithDetails | null> {
+    try {
+      return await prisma.groupInvitation.findFirst({
+        where: {
+          groupId,
+          inviteeId: userId,
+        },
+        include: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              avatar: true,
+            },
+          },
+          inviter: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+          invitee: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error) {
+      throw new Error(`Error finding invitation by group and user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update invitation status
+   */
+  async updateStatus(id: string, status: InvitationStatus): Promise<GroupInvitationWithDetails> {
+    try {
+      return await prisma.groupInvitation.update({
+        where: { id },
+        data: { status },
+        include: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              avatar: true,
+            },
+          },
+          inviter: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+          invitee: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        throw new Error('Invitation not found');
+      }
+      throw new Error(`Error updating invitation status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Delete invitation
+   */
+  async delete(id: string): Promise<boolean> {
+    try {
+      await prisma.groupInvitation.delete({
+        where: { id },
+      });
+      return true;
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        throw new Error('Invitation not found');
+      }
+      throw new Error(`Error deleting invitation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Delete expired invitations
+   */
+  async deleteExpired(): Promise<number> {
+    try {
+      const result = await prisma.groupInvitation.deleteMany({
+        where: {
+          status: InvitationStatus.PENDING,
+          expiresAt: {
+            lt: new Date(),
+          },
+        },
+      });
+      return result.count;
+    } catch (error) {
+      throw new Error(`Error deleting expired invitations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get group invitation statistics
+   */
+  async getGroupStats(groupId: string): Promise<{
+    totalSent: number;
+    totalAccepted: number;
+    totalRejected: number;
+    totalPending: number;
+  }> {
+    try {
+      const [totalSent, totalAccepted, totalRejected, totalPending] = await Promise.all([
+        prisma.groupInvitation.count({
+          where: { groupId },
+        }),
+        prisma.groupInvitation.count({
+          where: { groupId, status: InvitationStatus.ACCEPTED },
+        }),
+        prisma.groupInvitation.count({
+          where: { groupId, status: InvitationStatus.DECLINED },
+        }),
+        prisma.groupInvitation.count({
+          where: { 
+            groupId, 
+            status: InvitationStatus.PENDING,
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: new Date() } }
+            ],
+          },
+        }),
+      ]);
+
+      return {
+        totalSent,
+        totalAccepted,
+        totalRejected,
+        totalPending,
+      };
+    } catch (error) {
+      throw new Error(`Error getting group invitation stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get user invitation statistics
+   */
+  async getUserStats(userId: string): Promise<{
+    totalReceived: number;
+    totalAccepted: number;
+    totalRejected: number;
+    totalPending: number;
+    totalSent: number;
+  }> {
+    try {
+      const [totalReceived, totalAccepted, totalRejected, totalPending, totalSent] = await Promise.all([
+        prisma.groupInvitation.count({
+          where: { inviteeId: userId },
+        }),
+        prisma.groupInvitation.count({
+          where: { inviteeId: userId, status: InvitationStatus.ACCEPTED },
+        }),
+        prisma.groupInvitation.count({
+          where: { inviteeId: userId, status: InvitationStatus.DECLINED },
+        }),
+        prisma.groupInvitation.count({
+          where: { 
+            inviteeId: userId, 
+            status: InvitationStatus.PENDING,
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: new Date() } }
+            ],
+          },
+        }),
+        prisma.groupInvitation.count({
+          where: { inviterId: userId },
+        }),
+      ]);
+
+      return {
+        totalReceived,
+        totalAccepted,
+        totalRejected,
+        totalPending,
+        totalSent,
+      };
+    } catch (error) {
+      throw new Error(`Error getting user invitation stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get pending invitations for a user (legacy method name for compatibility)
+   */
+  async getPendingInvitationsForUser(userId: string): Promise<GroupInvitationWithDetails[]> {
+    return this.findPendingByInviteeId(userId);
   }
 
   /**
@@ -189,12 +521,12 @@ export class GroupInvitationRepository {
   async getSentInvitationsByUser(userId: string, options: {
     limit?: number;
     offset?: number;
-    status?: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
-  } = {}) {
+    status?: InvitationStatus;
+  } = {}): Promise<GroupInvitationWithDetails[]> {
     try {
       const { limit = 20, offset = 0, status } = options;
 
-      const whereClause: any = { senderId: userId };
+      const whereClause: any = { inviterId: userId };
       if (status) {
         whereClause.status = status;
       }
@@ -210,7 +542,16 @@ export class GroupInvitationRepository {
               avatar: true,
             },
           },
-          receiver: {
+          inviter: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+          invitee: {
             select: {
               id: true,
               username: true,
@@ -230,51 +571,18 @@ export class GroupInvitationRepository {
   }
 
   /**
-   * Get pending invitations for a group
+   * Get pending invitations for a group (legacy method name for compatibility)
    */
-  async getPendingInvitationsForGroup(groupId: string) {
-    try {
-      return await prisma.groupInvitation.findMany({
-        where: {
-          groupId,
-          status: 'PENDING',
-          expiresAt: {
-            gt: new Date(),
-          },
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              avatar: true,
-            },
-          },
-          receiver: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              avatar: true,
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-    } catch (error) {
-      throw new Error(`Error getting pending invitations for group: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+  async getPendingInvitationsForGroup(groupId: string): Promise<GroupInvitationWithDetails[]> {
+    return this.findPendingByGroupId(groupId);
   }
 
   /**
    * Accept invitation
    */
-  async acceptInvitation(id: string, userId: string) {
+  async acceptInvitation(id: string, userId: string): Promise<GroupInvitationWithDetails> {
     try {
-      return await prisma.$transaction(async (tx: any) => {
+      return await prisma.$transaction(async (tx) => {
         // Find invitation
         const invitation = await tx.groupInvitation.findUnique({
           where: { id },
@@ -292,13 +600,13 @@ export class GroupInvitationRepository {
           throw new Error('Invitation not found');
         }
 
-        // Check if user is the receiver
-        if (invitation.receiverId !== userId) {
+        // Check if user is the invitee
+        if (invitation.inviteeId !== userId) {
           throw new Error('You can only accept your own invitations');
         }
 
         // Check if invitation is still pending
-        if (invitation.status !== 'PENDING') {
+        if (invitation.status !== InvitationStatus.PENDING) {
           throw new Error(`Invitation has already been ${invitation.status.toLowerCase()}`);
         }
 
@@ -324,9 +632,37 @@ export class GroupInvitationRepository {
         }
 
         // Update invitation status
-        await tx.groupInvitation.update({
+        const updatedInvitation = await tx.groupInvitation.update({
           where: { id },
-          data: { status: 'ACCEPTED' },
+          data: { status: InvitationStatus.ACCEPTED },
+          include: {
+            group: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                avatar: true,
+              },
+            },
+            inviter: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+              },
+            },
+            invitee: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+              },
+            },
+          },
         });
 
         // Add user to group members
@@ -347,7 +683,7 @@ export class GroupInvitationRepository {
           },
         });
 
-        return invitation;
+        return updatedInvitation;
       });
     } catch (error: any) {
       if (error?.code === 'P2025') {
@@ -360,7 +696,7 @@ export class GroupInvitationRepository {
   /**
    * Decline invitation
    */
-  async declineInvitation(id: string, userId: string) {
+  async declineInvitation(id: string, userId: string): Promise<GroupInvitationWithDetails> {
     try {
       // Find and update invitation
       const invitation = await prisma.groupInvitation.findUnique({
@@ -371,20 +707,20 @@ export class GroupInvitationRepository {
         throw new Error('Invitation not found');
       }
 
-      // Check if user is the receiver
-      if (invitation.receiverId !== userId) {
+      // Check if user is the invitee
+      if (invitation.inviteeId !== userId) {
         throw new Error('You can only decline your own invitations');
       }
 
       // Check if invitation is still pending
-      if (invitation.status !== 'PENDING') {
+      if (invitation.status !== InvitationStatus.PENDING) {
         throw new Error(`Invitation has already been ${invitation.status.toLowerCase()}`);
       }
 
       // Update invitation status
       return await prisma.groupInvitation.update({
         where: { id },
-        data: { status: 'DECLINED' },
+        data: { status: InvitationStatus.DECLINED },
         include: {
           group: {
             select: {
@@ -394,7 +730,7 @@ export class GroupInvitationRepository {
               avatar: true,
             },
           },
-          sender: {
+          inviter: {
             select: {
               id: true,
               username: true,
@@ -403,7 +739,7 @@ export class GroupInvitationRepository {
               avatar: true,
             },
           },
-          receiver: {
+          invitee: {
             select: {
               id: true,
               username: true,
@@ -425,7 +761,7 @@ export class GroupInvitationRepository {
   /**
    * Cancel invitation (by sender)
    */
-  async cancelInvitation(id: string, userId: string) {
+  async cancelInvitation(id: string, userId: string): Promise<boolean> {
     try {
       // Find invitation
       const invitation = await prisma.groupInvitation.findUnique({
@@ -436,13 +772,13 @@ export class GroupInvitationRepository {
         throw new Error('Invitation not found');
       }
 
-      // Check if user is the sender
-      if (invitation.senderId !== userId) {
+      // Check if user is the inviter
+      if (invitation.inviterId !== userId) {
         throw new Error('You can only cancel invitations you sent');
       }
 
       // Check if invitation is still pending
-      if (invitation.status !== 'PENDING') {
+      if (invitation.status !== InvitationStatus.PENDING) {
         throw new Error(`Invitation has already been ${invitation.status.toLowerCase()}`);
       }
 
@@ -467,13 +803,13 @@ export class GroupInvitationRepository {
     try {
       const result = await prisma.groupInvitation.updateMany({
         where: {
-          status: 'PENDING',
+          status: InvitationStatus.PENDING,
           expiresAt: {
             lt: new Date(),
           },
         },
         data: {
-          status: 'EXPIRED',
+          status: InvitationStatus.EXPIRED,
         },
       });
 
@@ -484,7 +820,7 @@ export class GroupInvitationRepository {
   }
 
   /**
-   * Get invitation statistics for a group
+   * Get invitation statistics for a group (legacy method name)
    */
   async getGroupInvitationStats(groupId: string): Promise<{
     total: number;
@@ -499,16 +835,16 @@ export class GroupInvitationRepository {
           where: { groupId },
         }),
         prisma.groupInvitation.count({
-          where: { groupId, status: 'PENDING' },
+          where: { groupId, status: InvitationStatus.PENDING },
         }),
         prisma.groupInvitation.count({
-          where: { groupId, status: 'ACCEPTED' },
+          where: { groupId, status: InvitationStatus.ACCEPTED },
         }),
         prisma.groupInvitation.count({
-          where: { groupId, status: 'DECLINED' },
+          where: { groupId, status: InvitationStatus.DECLINED },
         }),
         prisma.groupInvitation.count({
-          where: { groupId, status: 'EXPIRED' },
+          where: { groupId, status: InvitationStatus.EXPIRED },
         }),
       ]);
 
@@ -538,7 +874,7 @@ export class GroupInvitationRepository {
             lt: cutoffDate,
           },
           status: {
-            in: ['DECLINED', 'EXPIRED'],
+            in: [InvitationStatus.DECLINED, InvitationStatus.EXPIRED],
           },
         },
       });

@@ -128,8 +128,8 @@ model GroupMember {
 model GroupInvitation {
   id         String            @id @default(cuid())
   groupId    String
-  senderId   String
-  receiverId String
+  inviterId  String
+  inviteeId  String
   status     InvitationStatus  @default(PENDING)
   message    String?
   expiresAt  DateTime?
@@ -138,10 +138,10 @@ model GroupInvitation {
 
   // Relationships
   group    Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  sender   User  @relation("InvitationSender", fields: [senderId], references: [id])
-  receiver User  @relation("InvitationReceiver", fields: [receiverId], references: [id])
+  inviter  User  @relation("InvitationSender", fields: [inviterId], references: [id])
+  invitee  User  @relation("InvitationReceiver", fields: [inviteeId], references: [id])
 
-  @@unique([groupId, receiverId])
+  @@unique([groupId, inviteeId])
   @@map("group_invitations")
 }
 

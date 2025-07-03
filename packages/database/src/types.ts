@@ -298,6 +298,41 @@ export type GroupWithDetails = Prisma.GroupGetPayload<{
 export type CreateGroupData = Prisma.GroupCreateInput;
 export type UpdateGroupData = Prisma.GroupUpdateInput;
 
+// Group Invitation Types
+export type GroupInvitationWithDetails = Prisma.GroupInvitationGetPayload<{
+  include: {
+    group: {
+      select: {
+        id: true;
+        name: true;
+        avatar: true;
+        description: true;
+      };
+    };
+    inviter: {
+      select: {
+        id: true;
+        username: true;
+        firstName: true;
+        lastName: true;
+        avatar: true;
+      };
+    };
+    invitee: {
+      select: {
+        id: true;
+        username: true;
+        firstName: true;
+        lastName: true;
+        avatar: true;
+      };
+    };
+  };
+}>;
+
+export type CreateGroupInvitationData = Prisma.GroupInvitationCreateInput;
+export type UpdateGroupInvitationData = Prisma.GroupInvitationUpdateInput;
+
 // User Session Types
 export type UserSessionWithUser = Prisma.UserSessionGetPayload<{
   include: {
