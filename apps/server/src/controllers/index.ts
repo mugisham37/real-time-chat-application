@@ -14,6 +14,10 @@ export { groupController } from './group.controller'
 export { groupInvitationController } from './groupInvitation.controller'
 export { groupJoinRequestController } from './groupJoinRequest.controller'
 export { messageController } from './message.controller'
+export { notificationController } from './notification.controller'
+export { presenceController } from './presence.controller'
+export { scheduledMessageController } from './scheduledMessage.controller'
+export { userController } from './user.controller'
 export { BaseController } from './base.controller'
 
 // Export types for better TypeScript support
