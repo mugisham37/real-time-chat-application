@@ -15,6 +15,11 @@ export { groupJoinRequestService, GroupJoinRequestService } from "./groupJoinReq
 export { scheduledMessageService, ScheduledMessageService } from "./scheduledMessage.service"
 export { searchService, SearchService } from "./search.service"
 
+// Additional high-level services
+export { contentModerationService, ContentModerationService } from "./contentModeration.service"
+export { presenceService, PresenceService } from "./presence.service"
+export { fileManagementService, FileManagementService } from "./fileManagement.service"
+
 // Service types and interfaces
 export interface ServiceResponse<T = any> {
   success: boolean
