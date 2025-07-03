@@ -5,6 +5,10 @@ import { callRoutes } from './call.routes';
 import { contentModerationRoutes } from './contentModeration.routes';
 import { conversationRoutes } from './conversation.routes';
 import { e2eeRoutes } from './e2ee.routes';
+import { fileManagementRoutes } from './fileManagement.routes';
+import { groupRoutes } from './group.routes';
+import { groupInvitationRoutes } from './groupInvitation.routes';
+import { groupJoinRequestRoutes } from './groupJoinRequest.routes';
 import { basicMiddleware, apiMiddleware } from '../middleware';
 import { logger } from '../utils/logger';
 
@@ -55,6 +59,10 @@ router.use('/calls', callRoutes);
 router.use('/moderation', contentModerationRoutes);
 router.use('/conversations', conversationRoutes);
 router.use('/e2ee', e2eeRoutes);
+router.use('/files', fileManagementRoutes);
+router.use('/groups', groupRoutes);
+router.use('/group-invitations', groupInvitationRoutes);
+router.use('/group-join-requests', groupJoinRequestRoutes);
 
 // API documentation endpoint
 router.get('/docs', basicMiddleware, (req, res) => {
@@ -136,6 +144,57 @@ router.get('/docs', basicMiddleware, (req, res) => {
             'POST /encrypt - Encrypt message',
             'POST /decrypt - Decrypt message'
           ]
+        },
+        files: {
+          base: '/api/files',
+          description: 'File management and sharing',
+          endpoints: [
+            'POST /upload - Upload file',
+            'GET /:fileId - Get file metadata',
+            'GET /:fileId/download - Download file',
+            'DELETE /:fileId - Delete file',
+            'POST /:fileId/share - Share file',
+            'GET /my-files - Get user files',
+            'GET /search - Search files'
+          ]
+        },
+        groups: {
+          base: '/api/groups',
+          description: 'Group management and operations',
+          endpoints: [
+            'POST / - Create group',
+            'GET /:id - Get group details',
+            'PUT /:id - Update group',
+            'DELETE /:id - Delete group',
+            'POST /:id/join - Join group',
+            'POST /:id/leave - Leave group',
+            'GET /my-groups - Get user groups',
+            'GET /search - Search public groups'
+          ]
+        },
+        groupInvitations: {
+          base: '/api/group-invitations',
+          description: 'Group invitation management',
+          endpoints: [
+            'POST / - Create invitation',
+            'GET /pending - Get pending invitations',
+            'POST /:id/accept - Accept invitation',
+            'POST /:id/reject - Reject invitation',
+            'DELETE /:id - Cancel invitation',
+            'POST /bulk - Bulk invite users'
+          ]
+        },
+        groupJoinRequests: {
+          base: '/api/group-join-requests',
+          description: 'Group join request management',
+          endpoints: [
+            'POST / - Create join request',
+            'GET /my-requests - Get user requests',
+            'POST /:id/approve - Approve request',
+            'POST /:id/reject - Reject request',
+            'DELETE /:id - Cancel request',
+            'POST /bulk-approve - Bulk approve requests'
+          ]
         }
       }
     },
@@ -163,7 +222,11 @@ router.use('*', (req, res) => {
         '/api/calls',
         '/api/moderation',
         '/api/conversations',
-        '/api/e2ee'
+        '/api/e2ee',
+        '/api/files',
+        '/api/groups',
+        '/api/group-invitations',
+        '/api/group-join-requests'
       ]
     }
   });
