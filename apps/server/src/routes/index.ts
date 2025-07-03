@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { authRoutes } from './auth.routes';
 import { analyticsRoutes } from './analytics.routes';
 import { callRoutes } from './call.routes';
@@ -9,6 +9,9 @@ import { fileManagementRoutes } from './fileManagement.routes';
 import { groupRoutes } from './group.routes';
 import { groupInvitationRoutes } from './groupInvitation.routes';
 import { groupJoinRequestRoutes } from './groupJoinRequest.routes';
+import { messageRoutes } from './message.routes';
+import { notificationRoutes } from './notification.routes';
+import { presenceRoutes } from './presence.routes';
 import { basicMiddleware, apiMiddleware } from '../middleware';
 import { logger } from '../utils/logger';
 
@@ -20,7 +23,7 @@ import { logger } from '../utils/logger';
 const router = Router();
 
 // Health check endpoint
-router.get('/health', basicMiddleware, (req, res) => {
+router.get('/health', basicMiddleware, (req: Request, res: Response) => {
   res.json({
     success: true,
     message: 'Server is healthy',
@@ -31,7 +34,7 @@ router.get('/health', basicMiddleware, (req, res) => {
 });
 
 // API version info
-router.get('/version', basicMiddleware, (req, res) => {
+router.get('/version', basicMiddleware, (req: Request, res: Response) => {
   res.json({
     success: true,
     data: {
@@ -63,9 +66,12 @@ router.use('/files', fileManagementRoutes);
 router.use('/groups', groupRoutes);
 router.use('/group-invitations', groupInvitationRoutes);
 router.use('/group-join-requests', groupJoinRequestRoutes);
+router.use('/messages', messageRoutes);
+router.use('/notifications', notificationRoutes);
+router.use('/presence', presenceRoutes);
 
 // API documentation endpoint
-router.get('/docs', basicMiddleware, (req, res) => {
+router.get('/docs', basicMiddleware, (req: Request, res: Response) => {
   res.json({
     success: true,
     data: {
@@ -195,6 +201,52 @@ router.get('/docs', basicMiddleware, (req, res) => {
             'DELETE /:id - Cancel request',
             'POST /bulk-approve - Bulk approve requests'
           ]
+        },
+        messages: {
+          base: '/api/messages',
+          description: 'Message management and operations',
+          endpoints: [
+            'POST / - Create message',
+            'GET /:id - Get message',
+            'PUT /:id - Update message',
+            'DELETE /:id - Delete message',
+            'POST /:id/reactions - Add reaction',
+            'DELETE /:id/reactions/:reactionType - Remove reaction',
+            'POST /:id/read - Mark as read',
+            'GET /search - Search messages',
+            'GET /conversations/:conversationId/stats - Get conversation stats',
+            'GET /my-stats - Get user message stats'
+          ]
+        },
+        notifications: {
+          base: '/api/notifications',
+          description: 'Notification management and preferences',
+          endpoints: [
+            'GET / - Get notifications',
+            'GET /unread-count - Get unread count',
+            'PUT /:id/read - Mark as read',
+            'PUT /mark-all-read - Mark all as read',
+            'DELETE /:id - Delete notification',
+            'DELETE /all - Delete all notifications',
+            'GET /preferences - Get preferences',
+            'PUT /preferences - Update preferences',
+            'POST /push/subscribe - Subscribe to push notifications'
+          ]
+        },
+        presence: {
+          base: '/api/presence',
+          description: 'User presence and activity status',
+          endpoints: [
+            'PUT /status - Update presence status',
+            'GET /user/:userId - Get user presence',
+            'POST /users - Get multiple users presence',
+            'GET /online - Get online users',
+            'GET /online/count - Get online users count',
+            'POST /typing - Set typing indicator',
+            'GET /typing/:conversationId - Get typing users',
+            'PUT /activity - Set activity status',
+            'PUT /location - Update location'
+          ]
         }
       }
     },
@@ -226,7 +278,10 @@ router.use('*', (req, res) => {
         '/api/files',
         '/api/groups',
         '/api/group-invitations',
-        '/api/group-join-requests'
+        '/api/group-join-requests',
+        '/api/messages',
+        '/api/notifications',
+        '/api/presence'
       ]
     }
   });
