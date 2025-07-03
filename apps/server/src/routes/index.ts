@@ -12,6 +12,8 @@ import { groupJoinRequestRoutes } from './groupJoinRequest.routes';
 import { messageRoutes } from './message.routes';
 import { notificationRoutes } from './notification.routes';
 import { presenceRoutes } from './presence.routes';
+import { scheduledMessageRoutes } from './scheduledMessage.routes';
+import { userRoutes } from './user.routes';
 import { basicMiddleware, apiMiddleware } from '../middleware';
 import { logger } from '../utils/logger';
 
@@ -69,6 +71,8 @@ router.use('/group-join-requests', groupJoinRequestRoutes);
 router.use('/messages', messageRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/presence', presenceRoutes);
+router.use('/scheduled-messages', scheduledMessageRoutes);
+router.use('/users', userRoutes);
 
 // API documentation endpoint
 router.get('/docs', basicMiddleware, (req: Request, res: Response) => {
@@ -247,6 +251,40 @@ router.get('/docs', basicMiddleware, (req: Request, res: Response) => {
             'PUT /activity - Set activity status',
             'PUT /location - Update location'
           ]
+        },
+        scheduledMessages: {
+          base: '/api/scheduled-messages',
+          description: 'Scheduled message management and automation',
+          endpoints: [
+            'POST / - Schedule a message',
+            'GET /my-messages - Get user scheduled messages',
+            'PUT /:id - Update scheduled message',
+            'DELETE /:id - Cancel scheduled message',
+            'GET /stats - Get scheduled message statistics',
+            'GET /conversation/:conversationId - Get conversation scheduled messages',
+            'POST /bulk-cancel - Bulk cancel scheduled messages',
+            'GET /upcoming - Get upcoming scheduled messages',
+            'POST /:id/reschedule - Reschedule message'
+          ]
+        },
+        users: {
+          base: '/api/users',
+          description: 'User profile management and operations',
+          endpoints: [
+            'GET /me - Get current user profile',
+            'PUT /me - Update current user profile',
+            'GET /:id - Get user by ID',
+            'PUT /me/status - Update user status',
+            'GET /:id/status - Get user status',
+            'GET /search - Search users',
+            'GET /contacts - Get user contacts',
+            'POST /contacts - Add contact',
+            'DELETE /contacts/:id - Remove contact',
+            'GET /blocked - Get blocked users',
+            'POST /block - Block user',
+            'DELETE /blocked/:id - Unblock user',
+            'GET /me/export - Export user data'
+          ]
         }
       }
     },
@@ -281,7 +319,9 @@ router.use('*', (req, res) => {
         '/api/group-join-requests',
         '/api/messages',
         '/api/notifications',
-        '/api/presence'
+        '/api/presence',
+        '/api/scheduled-messages',
+        '/api/users'
       ]
     }
   });
