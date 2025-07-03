@@ -236,8 +236,8 @@ export class FileManagementController extends BaseController {
     }))
 
     const pagination = this.calculatePagination(
-      Math.floor(query.skip / query.limit) + 1,
-      query.limit,
+      Math.floor((query.skip || 0) / (query.limit || 20)) + 1,
+      query.limit || 20,
       result.total
     )
 
@@ -382,7 +382,9 @@ export class FileManagementController extends BaseController {
     )
 
     // Apply pagination to search results
-    const paginatedResults = searchResults.slice(query.skip, query.skip + query.limit)
+    const skip = query.skip || 0
+    const limit = query.limit || 20
+    const paginatedResults = searchResults.slice(skip, skip + limit)
 
     // Transform dates
     const transformedFiles = paginatedResults.map(file => ({
@@ -392,8 +394,8 @@ export class FileManagementController extends BaseController {
     }))
 
     const pagination = this.calculatePagination(
-      Math.floor(query.skip / query.limit) + 1,
-      query.limit,
+      Math.floor((query.skip || 0) / (query.limit || 20)) + 1,
+      query.limit || 20,
       searchResults.length
     )
 
