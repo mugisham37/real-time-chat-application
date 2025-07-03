@@ -26,9 +26,7 @@ export class ConversationService {
       // Create new conversation
       const conversation = await conversationRepository.create({
         participants,
-        type: participants.length === 2 ? "DIRECT" : "GROUP",
-        createdAt: new Date(),
-        updatedAt: new Date()
+        type: participants.length === 2 ? "DIRECT" : "GROUP"
       })
 
       // Cache conversation data
@@ -78,7 +76,7 @@ export class ConversationService {
 
       // Check if user is a participant
       const isParticipant = conversation.participants.some((participant: any) => 
-        participant.id === userId || participant === userId
+        participant.userId === userId || participant.user?.id === userId
       )
 
       if (!isParticipant) {
@@ -105,7 +103,7 @@ export class ConversationService {
         return cachedConversations as any[]
       }
 
-      const conversations = await conversationRepository.findByUserId(userId, limit, skip)
+      const conversations = await conversationRepository.getUserConversations(userId, { limit, offset: skip })
 
       // Cache the result for 5 minutes
       await this.redis.setJSON(cacheKey, conversations, 300)
@@ -135,7 +133,7 @@ export class ConversationService {
       }
 
       const isParticipant = conversation.participants.some((participant: any) => 
-        participant.id === userId || participant === userId
+        participant.userId === userId || participant.user?.id === userId
       )
 
       if (!isParticipant) {
@@ -235,7 +233,7 @@ export class ConversationService {
       }
 
       const isParticipant = conversation.participants.some((participant: any) => 
-        participant.id === userId || participant === userId
+        participant.userId === userId || participant.user?.id === userId
       )
 
       if (!isParticipant) {
@@ -244,7 +242,7 @@ export class ConversationService {
 
       // Check if new participant already exists
       const isAlreadyParticipant = conversation.participants.some((participant: any) => 
-        participant.id === newParticipantId || participant === newParticipantId
+        participant.userId === newParticipantId || participant.user?.id === newParticipantId
       )
 
       if (isAlreadyParticipant) {
@@ -298,7 +296,7 @@ export class ConversationService {
       }
 
       const isParticipant = conversation.participants.some((participant: any) => 
-        participant.id === userId || participant === userId
+        participant.userId === userId || participant.user?.id === userId
       )
 
       if (!isParticipant) {
@@ -307,7 +305,7 @@ export class ConversationService {
 
       // Check if participant to remove exists
       const participantExists = conversation.participants.some((participant: any) => 
-        participant.id === participantToRemove || participant === participantToRemove
+        participant.userId === participantToRemove || participant.user?.id === participantToRemove
       )
 
       if (!participantExists) {

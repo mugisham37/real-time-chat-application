@@ -592,6 +592,269 @@ export class ConversationRepository {
   }
 
   /**
+   * Create a new conversation (generic method for service layer)
+   */
+  async create(conversationData: {
+    participants: string[];
+    type: 'DIRECT' | 'GROUP';
+    name?: string;
+    description?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
+  }): Promise<ConversationWithDetails> {
+    try {
+      if (conversationData.type === 'DIRECT') {
+        return await this.createDirectConversation(conversationData.participants);
+      }
+
+      // For GROUP conversations
+      return await prisma.$transaction(async (tx: any) => {
+        const conversation = await tx.conversation.create({
+          data: {
+            type: conversationData.type,
+            name: conversationData.name,
+            participants: {
+              create: conversationData.participants.map((userId) => ({
+                userId,
+                role: 'MEMBER',
+              })),
+            },
+          },
+          include: {
+            participants: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    firstName: true,
+                    lastName: true,
+                    avatar: true,
+                    isOnline: true,
+                    lastSeen: true,
+                  },
+                },
+              },
+            },
+            messages: {
+              take: 1,
+              orderBy: { createdAt: 'desc' },
+              include: {
+                sender: {
+                  select: {
+                    id: true,
+                    username: true,
+                  },
+                },
+              },
+            },
+            group: {
+              include: {
+                members: {
+                  include: {
+                    user: {
+                      select: {
+                        id: true,
+                        username: true,
+                        avatar: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        return conversation;
+      });
+    } catch (error: any) {
+      throw new Error(`Error creating conversation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update conversation
+   */
+  async update(id: string, updateData: {
+    name?: string;
+    description?: string;
+    avatar?: string;
+    settings?: Record<string, any>;
+    updatedAt?: Date;
+  }): Promise<ConversationWithDetails | null> {
+    try {
+      const updatedConversation = await prisma.conversation.update({
+        where: { id },
+        data: {
+          name: updateData.name,
+          avatar: updateData.avatar,
+          updatedAt: updateData.updatedAt || new Date(),
+        },
+        include: {
+          participants: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                  avatar: true,
+                  isOnline: true,
+                  lastSeen: true,
+                },
+              },
+            },
+          },
+          messages: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+          group: {
+            include: {
+              members: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      avatar: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return updatedConversation;
+    } catch (error: any) {
+      if (error?.code === 'P2025') {
+        throw new Error('Conversation not found');
+      }
+      throw new Error(`Error updating conversation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Search conversations
+   */
+  async search(userId: string, query: string, limit = 10): Promise<ConversationWithDetails[]> {
+    try {
+      return await prisma.conversation.findMany({
+        where: {
+          AND: [
+            {
+              participants: {
+                some: {
+                  userId,
+                },
+              },
+            },
+            {
+              OR: [
+                {
+                  name: {
+                    contains: query,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  participants: {
+                    some: {
+                      user: {
+                        OR: [
+                          {
+                            username: {
+                              contains: query,
+                              mode: 'insensitive',
+                            },
+                          },
+                          {
+                            firstName: {
+                              contains: query,
+                              mode: 'insensitive',
+                            },
+                          },
+                          {
+                            lastName: {
+                              contains: query,
+                              mode: 'insensitive',
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+          isActive: true,
+        },
+        include: {
+          participants: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  firstName: true,
+                  lastName: true,
+                  avatar: true,
+                  isOnline: true,
+                  lastSeen: true,
+                },
+              },
+            },
+          },
+          messages: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+          group: {
+            include: {
+              members: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      avatar: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: limit,
+      });
+    } catch (error) {
+      throw new Error(`Error searching conversations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Get conversation statistics
    */
   async getConversationStats(conversationId: string): Promise<{
@@ -631,6 +894,17 @@ export class ConversationRepository {
       };
     } catch (error) {
       throw new Error(`Error getting conversation stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Alias for findByUserId - for backward compatibility
+   */
+  async findByUserId(userId: string, limit = 20, skip = 0): Promise<ConversationWithDetails[]> {
+    try {
+      return await this.getUserConversations(userId, { limit, offset: skip });
+    } catch (error) {
+      throw new Error(`Error finding conversations by user ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

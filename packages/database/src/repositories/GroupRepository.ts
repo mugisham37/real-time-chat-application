@@ -36,12 +36,12 @@ export class GroupRepository {
           },
         });
 
-        // Add creator as admin member
+        // Add creator as owner member
         await tx.groupMember.create({
           data: {
             groupId: group.id,
             userId: groupData.creatorId,
-            role: 'ADMIN',
+            role: 'OWNER',
           },
         });
 

@@ -787,6 +787,248 @@ export class MessageRepository {
   }
 
   /**
+   * Find messages by conversation ID with pagination
+   */
+  async findByConversationId(
+    conversationId: string,
+    limit = 50,
+    before?: Date
+  ): Promise<MessageWithDetails[]> {
+    try {
+      const whereClause: any = {
+        conversationId,
+        isDeleted: false,
+      };
+
+      if (before) {
+        whereClause.createdAt = { lt: before };
+      }
+
+      return await prisma.message.findMany({
+        where: whereClause,
+        include: {
+          sender: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+          reactions: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+          attachments: {
+            include: {
+              fileUpload: true,
+            },
+          },
+          replyTo: {
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      });
+    } catch (error) {
+      throw new Error(`Error finding messages by conversation ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Mark messages as read by conversation
+   */
+  async markAsReadByConversation(conversationId: string, userId: string): Promise<number> {
+    try {
+      // Update the conversation participant's lastReadAt timestamp
+      await prisma.conversationParticipant.update({
+        where: {
+          conversationId_userId: {
+            conversationId,
+            userId,
+          },
+        },
+        data: {
+          lastReadAt: new Date(),
+        },
+      });
+
+      // Count how many messages were marked as read
+      const unreadCount = await prisma.message.count({
+        where: {
+          conversationId,
+          senderId: {
+            not: userId, // Don't count user's own messages
+          },
+          isDeleted: false,
+        },
+      });
+
+      return unreadCount;
+    } catch (error) {
+      throw new Error(`Error marking messages as read: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get unread message count for user across all conversations
+   */
+  async getUnreadCountForUser(userId: string): Promise<number> {
+    try {
+      // Get all conversations where user is a participant
+      const participantData = await prisma.conversationParticipant.findMany({
+        where: {
+          userId,
+          conversation: {
+            isActive: true,
+          },
+        },
+        select: {
+          conversationId: true,
+          lastReadAt: true,
+        },
+      });
+
+      let totalUnreadCount = 0;
+
+      // For each conversation, count unread messages
+      for (const participant of participantData) {
+        const unreadCount = await prisma.message.count({
+          where: {
+            conversationId: participant.conversationId,
+            createdAt: {
+              gt: participant.lastReadAt,
+            },
+            senderId: {
+              not: userId, // Don't count user's own messages
+            },
+            isDeleted: false,
+          },
+        });
+
+        totalUnreadCount += unreadCount;
+      }
+
+      return totalUnreadCount;
+    } catch (error) {
+      throw new Error(`Error getting unread count for user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get message count by conversation
+   */
+  async getMessageCountByConversation(conversationId: string): Promise<number> {
+    try {
+      return await prisma.message.count({
+        where: {
+          conversationId,
+          isDeleted: false,
+        },
+      });
+    } catch (error) {
+      throw new Error(`Error getting message count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get last message by conversation
+   */
+  async getLastMessageByConversation(conversationId: string): Promise<MessageWithDetails | null> {
+    try {
+      return await prisma.message.findFirst({
+        where: {
+          conversationId,
+          isDeleted: false,
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+          reactions: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+          attachments: {
+            include: {
+              fileUpload: true,
+            },
+          },
+          replyTo: {
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error) {
+      throw new Error(`Error getting last message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get message count by conversation and date range
+   */
+  async getMessageCountByConversationAndDate(
+    conversationId: string,
+    startDate: Date,
+    endDate?: Date
+  ): Promise<number> {
+    try {
+      const whereClause: any = {
+        conversationId,
+        isDeleted: false,
+        createdAt: {
+          gte: startDate,
+        },
+      };
+
+      if (endDate) {
+        whereClause.createdAt.lte = endDate;
+      }
+
+      return await prisma.message.count({
+        where: whereClause,
+      });
+    } catch (error) {
+      throw new Error(`Error getting message count by date: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Bulk delete messages
    */
   async bulkDelete(messageIds: string[], hardDelete = false): Promise<number> {

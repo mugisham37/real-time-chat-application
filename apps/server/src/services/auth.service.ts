@@ -14,7 +14,7 @@ export class AuthService {
    */
   generateToken(id: string): string {
     const options: SignOptions = {
-      expiresIn: config.jwt.expiresIn as string,
+      expiresIn: this.parseExpirationToSeconds(config.jwt.expiresIn),
     }
     return jwt.sign({ id }, config.jwt.secret, options)
   }
@@ -24,7 +24,7 @@ export class AuthService {
    */
   generateRefreshToken(id: string): string {
     const options: SignOptions = {
-      expiresIn: config.jwt.refreshExpiresIn as string,
+      expiresIn: this.parseExpirationToSeconds(config.jwt.refreshExpiresIn),
     }
     return jwt.sign({ id }, config.jwt.refreshSecret, options)
   }
@@ -495,6 +495,23 @@ export class AuthService {
   /**
    * Helper methods
    */
+  private parseExpirationToSeconds(expiration: string): number {
+    // Convert JWT expiration format to seconds for JWT library
+    const match = expiration.match(/^(\d+)([smhd])$/)
+    if (!match) return 3600 // Default 1 hour
+
+    const value = parseInt(match[1])
+    const unit = match[2]
+
+    switch (unit) {
+      case 's': return value
+      case 'm': return value * 60
+      case 'h': return value * 60 * 60
+      case 'd': return value * 60 * 60 * 24
+      default: return 3600
+    }
+  }
+
   private parseExpirationTime(expiration: string): number {
     // Convert JWT expiration format to seconds
     const match = expiration.match(/^(\d+)([smhd])$/)
