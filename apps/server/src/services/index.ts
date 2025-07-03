@@ -7,6 +7,14 @@ export { messageService, MessageService } from "./message.service"
 export { notificationService, NotificationService } from "./notification.service"
 export { userService, UserService } from "./user.service"
 
+// New services
+export { e2eeService, E2EEService } from "./e2ee.service"
+export { groupService, GroupService } from "./group.service"
+export { groupInvitationService, GroupInvitationService } from "./groupInvitation.service"
+export { groupJoinRequestService, GroupJoinRequestService } from "./groupJoinRequest.service"
+export { scheduledMessageService, ScheduledMessageService } from "./scheduledMessage.service"
+export { searchService, SearchService } from "./search.service"
+
 // Service types and interfaces
 export interface ServiceResponse<T = any> {
   success: boolean
