@@ -301,6 +301,7 @@ export const config = {
     ttl: env.CACHE_TTL,
     maxKeys: env.CACHE_MAX_KEYS,
     defaultExpiry: env.DEFAULT_CACHE_EXPIRY,
+    defaultTtl: env.DEFAULT_CACHE_EXPIRY, // Add this for backward compatibility
     keyPrefix: 'chat-app:',
     // Cache strategies for different data types
     strategies: {

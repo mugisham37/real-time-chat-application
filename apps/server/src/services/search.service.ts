@@ -34,7 +34,7 @@ export class SearchService {
       }
 
       // Perform search
-      const users = await userRepository.search(query, { limit, skip })
+      const users = await userRepository.search(query, { limit, offset: skip })
 
       // Filter out the current user
       const filteredUsers = users.filter((user) => user.id !== userId)
@@ -96,7 +96,7 @@ export class SearchService {
         )
 
         // Get public groups matching query
-        const publicGroups = await groupRepository.searchPublic(query, { limit, skip })
+        const publicGroups = await groupRepository.searchPublic(query, { limit, offset: skip })
 
         // Combine and deduplicate
         const allGroups = [...filteredUserGroups, ...publicGroups]
@@ -113,7 +113,7 @@ export class SearchService {
           .slice(0, limit)
       } else {
         // Just search public groups
-        groups = await groupRepository.searchPublic(query, { limit, skip })
+        groups = await groupRepository.searchPublic(query, { limit, offset: skip })
       }
 
       // Cache results if enabled and not including private groups
@@ -151,8 +151,8 @@ export class SearchService {
     try {
       const { conversationId, conversationType, limit = 20, skip = 0, startDate, endDate } = options
 
-      // Search messages
-      const messages = await messageRepository.search({
+      // Search messages using advancedSearch which supports conversationType
+      const messages = await messageRepository.advancedSearch({
         query,
         userId,
         conversationId,
@@ -224,13 +224,13 @@ export class SearchService {
 
       if (type === "users" || type === "all") {
         // Get recently contacted users
-        const recentContacts = await userRepository.getRecentContacts(userId, limit)
+        const recentContacts = await userRepository.getRecentContacts(userId, { limit })
         suggestions.users = recentContacts
       }
 
       if (type === "groups" || type === "all") {
         // Get user's active groups
-        const activeGroups = await groupRepository.findByUserId(userId, { limit })
+        const activeGroups = await groupRepository.findByUserId(userId)
         suggestions.groups = activeGroups
       }
 

@@ -462,6 +462,79 @@ export class UserRepository {
   }
 
   /**
+   * Get recent contacts for a user
+   */
+  async getRecentContacts(userId: string, options: {
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<UserWithProfile[]> {
+    try {
+      const { limit = 10, offset = 0 } = options;
+      
+      // Get users the current user has recently messaged
+      const recentContacts = await prisma.user.findMany({
+        where: {
+          id: {
+            not: userId,
+          },
+          OR: [
+            // Users who sent messages to the current user
+            {
+              sentMessages: {
+                some: {
+                  conversation: {
+                    participants: {
+                      some: {
+                        userId: userId,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            // Users who are in conversations with the current user
+            {
+              conversations: {
+                some: {
+                  conversation: {
+                    participants: {
+                      some: {
+                        userId: userId,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+          bio: true,
+          isOnline: true,
+          lastSeen: true,
+          createdAt: true,
+        },
+        orderBy: [
+          { isOnline: 'desc' },
+          { lastSeen: 'desc' },
+        ],
+        take: limit,
+        skip: offset,
+      });
+      
+      return recentContacts;
+    } catch (error) {
+      throw new Error(`Error getting recent contacts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Get recently active users
    */
   async getRecentlyActiveUsers(limit = 10): Promise<UserWithProfile[]> {

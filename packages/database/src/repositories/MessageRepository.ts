@@ -1058,6 +1058,119 @@ export class MessageRepository {
   }
 
   /**
+   * Advanced search messages with enhanced options including conversation type
+   */
+  async advancedSearch(options: {
+    query: string;
+    userId: string;
+    conversationId?: string;
+    conversationType?: 'DIRECT' | 'GROUP';
+    limit?: number;
+    skip?: number;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<MessageWithDetails[]> {
+    try {
+      const { 
+        query, 
+        userId, 
+        conversationId, 
+        conversationType,
+        limit = 20, 
+        skip = 0, 
+        startDate, 
+        endDate 
+      } = options;
+
+      const whereClause: any = {
+        content: {
+          contains: query,
+          mode: 'insensitive',
+        },
+        isDeleted: false,
+      };
+
+      if (userId) {
+        // Only search in conversations where user is a participant
+        whereClause.conversation = {
+          participants: {
+            some: {
+              userId,
+            },
+          },
+        };
+      }
+
+      if (conversationId) {
+        whereClause.conversationId = conversationId;
+      }
+
+      // Add conversation type filter if specified
+      if (conversationType) {
+        if (!whereClause.conversation) {
+          whereClause.conversation = {};
+        }
+        whereClause.conversation.type = conversationType;
+      }
+
+      if (startDate || endDate) {
+        whereClause.createdAt = {};
+        if (startDate) {
+          whereClause.createdAt.gte = startDate;
+        }
+        if (endDate) {
+          whereClause.createdAt.lte = endDate;
+        }
+      }
+
+      return await prisma.message.findMany({
+        where: whereClause,
+        include: {
+          sender: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            },
+          },
+          reactions: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+          attachments: {
+            include: {
+              fileUpload: true,
+            },
+          },
+          replyTo: {
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  username: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: skip,
+      });
+    } catch (error) {
+      throw new Error(`Error in advanced search: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Search messages with enhanced options
    */
   async search(options: {

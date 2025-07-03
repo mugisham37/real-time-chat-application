@@ -781,6 +781,33 @@ export class GroupRepository {
   }
 
   /**
+   * Find groups by user ID (alias for getUserGroups)
+   */
+  async findByUserId(userId: string, options: {
+    limit?: number;
+    offset?: number;
+    role?: 'ADMIN' | 'MODERATOR' | 'MEMBER';
+  } = {}): Promise<GroupWithDetails[]> {
+    return this.getUserGroups(userId, options);
+  }
+
+  /**
+   * Search public groups (alias for searchPublicGroups)
+   */
+  async searchPublic(query: string, options: {
+    limit?: number;
+    offset?: number;
+    excludeUserIds?: string[];
+  } = {}): Promise<GroupWithDetails[]> {
+    const { excludeUserIds, ...restOptions } = options;
+    const searchOptions = {
+      ...restOptions,
+      excludeUserGroups: excludeUserIds?.[0], // Take first user ID for exclusion
+    };
+    return this.searchPublicGroups(query, searchOptions);
+  }
+
+  /**
    * Get popular groups
    */
   async getPopularGroups(limit = 10): Promise<GroupWithDetails[]> {
