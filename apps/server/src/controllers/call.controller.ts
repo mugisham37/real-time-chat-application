@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { z } from 'zod'
 import { BaseController } from './base.controller'
 import { callService } from '../services/call.service'
+import { socketService } from '../services/socket.service'
 
 /**
  * Call Controller
@@ -37,6 +38,13 @@ export class CallController extends BaseController {
       body.metadata
     )
 
+    // Emit real-time incoming call to recipient
+    try {
+      await socketService.emitIncomingCall(body.recipientId, callData)
+    } catch (error) {
+      console.error('Failed to emit incoming call:', error)
+    }
+
     this.sendSuccess(res, callData, 'Call initiated successfully', 201)
   })
 
@@ -57,6 +65,13 @@ export class CallController extends BaseController {
     this.logAction('answerCall', userId, { callId })
 
     const callData = await callService.answerCall(callId, userId)
+
+    // Emit real-time call answered event
+    try {
+      await socketService.emitCallAnswered(callId, callData)
+    } catch (error) {
+      console.error('Failed to emit call answered:', error)
+    }
 
     this.sendSuccess(res, callData, 'Call answered successfully')
   })
@@ -99,6 +114,13 @@ export class CallController extends BaseController {
     this.logAction('endCall', userId, { callId })
 
     const callData = await callService.endCall(callId, userId)
+
+    // Emit real-time call ended event
+    try {
+      await socketService.emitCallEnded(callId, callData)
+    } catch (error) {
+      console.error('Failed to emit call ended:', error)
+    }
 
     this.sendSuccess(res, callData, 'Call ended successfully')
   })

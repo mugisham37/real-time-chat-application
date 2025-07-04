@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { z } from 'zod'
 import { BaseController } from './base.controller'
 import { messageService } from '../services/message.service'
+import { socketService } from '../services/socket.service'
 
 /**
  * Message Controller
@@ -53,6 +54,14 @@ export class MessageController extends BaseController {
 
     // Transform dates for response
     const transformedMessage = this.transformMessageDates(message)
+
+    // Emit real-time message to conversation participants
+    try {
+      await socketService.emitNewMessage(body.conversationId, transformedMessage, userId)
+    } catch (error) {
+      // Log error but don't fail the request
+      console.error('Failed to emit new message:', error)
+    }
 
     this.sendSuccess(res, transformedMessage, 'Message created successfully', 201)
   })
@@ -116,6 +125,13 @@ export class MessageController extends BaseController {
 
     const transformedMessage = this.transformMessageDates(updatedMessage)
 
+    // Emit real-time message update to conversation participants
+    try {
+      await socketService.emitMessageUpdate(updatedMessage.conversationId, transformedMessage)
+    } catch (error) {
+      console.error('Failed to emit message update:', error)
+    }
+
     this.sendSuccess(res, transformedMessage, 'Message updated successfully')
   })
 
@@ -146,6 +162,13 @@ export class MessageController extends BaseController {
     const deletedMessage = await messageService.deleteMessage(messageId, userId, query.hard)
 
     const transformedMessage = this.transformMessageDates(deletedMessage)
+
+    // Emit real-time message deletion to conversation participants
+    try {
+      await socketService.emitMessageDelete(deletedMessage.conversationId, messageId)
+    } catch (error) {
+      console.error('Failed to emit message deletion:', error)
+    }
 
     this.sendSuccess(res, transformedMessage, 'Message deleted successfully')
   })
@@ -178,6 +201,17 @@ export class MessageController extends BaseController {
 
     const transformedMessage = this.transformMessageDates(updatedMessage)
 
+    // Emit real-time reaction update to conversation participants
+    try {
+      await socketService.emitMessageReaction(
+        updatedMessage.conversationId, 
+        messageId, 
+        updatedMessage.reactions || []
+      )
+    } catch (error) {
+      console.error('Failed to emit message reaction:', error)
+    }
+
     this.sendSuccess(res, transformedMessage, 'Reaction added successfully')
   })
 
@@ -206,6 +240,17 @@ export class MessageController extends BaseController {
 
     const transformedMessage = this.transformMessageDates(updatedMessage)
 
+    // Emit real-time reaction update to conversation participants
+    try {
+      await socketService.emitMessageReaction(
+        updatedMessage.conversationId, 
+        messageId, 
+        updatedMessage.reactions || []
+      )
+    } catch (error) {
+      console.error('Failed to emit message reaction removal:', error)
+    }
+
     this.sendSuccess(res, transformedMessage, 'Reaction removed successfully')
   })
 
@@ -228,6 +273,13 @@ export class MessageController extends BaseController {
     const message = await messageService.markMessageAsRead(messageId, userId)
 
     const transformedMessage = this.transformMessageDates(message)
+
+    // Emit real-time read status to conversation participants
+    try {
+      await socketService.emitMessageRead(message.conversationId, messageId, userId)
+    } catch (error) {
+      console.error('Failed to emit message read status:', error)
+    }
 
     this.sendSuccess(res, transformedMessage, 'Message marked as read successfully')
   })

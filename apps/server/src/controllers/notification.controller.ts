@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { z } from 'zod'
 import { BaseController } from './base.controller'
 import { notificationService } from '../services/notification.service'
+import { socketService } from '../services/socket.service'
 import { NotificationBuilder } from '../utils/notificationBuilder'
 import { validateNotificationData } from '../utils/typeGuards'
 
@@ -226,6 +227,13 @@ export class NotificationController extends BaseController {
       ...notification,
       createdAt: notification.createdAt?.toISOString() || null,
       updatedAt: notification.updatedAt?.toISOString() || null
+    }
+
+    // Emit real-time notification to recipient
+    try {
+      await socketService.emitNotification(recipient, transformedNotification)
+    } catch (error) {
+      console.error('Failed to emit notification:', error)
     }
 
     this.sendSuccess(res, transformedNotification, 'Notification created successfully', 201)

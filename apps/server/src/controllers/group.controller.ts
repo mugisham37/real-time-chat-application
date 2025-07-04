@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { z } from 'zod'
 import { BaseController } from './base.controller'
 import { groupService } from '../services/group.service'
+import { socketService } from '../services/socket.service'
 
 /**
  * Group Controller
@@ -42,6 +43,13 @@ export class GroupController extends BaseController {
 
     // Transform dates for response
     const transformedGroup = this.transformGroupDates(group)
+
+    // Emit real-time group creation to all members
+    try {
+      await socketService.emitGroupCreated(transformedGroup)
+    } catch (error) {
+      console.error('Failed to emit group creation:', error)
+    }
 
     this.sendSuccess(res, transformedGroup, 'Group created successfully', 201)
   })
@@ -133,6 +141,13 @@ export class GroupController extends BaseController {
 
     const transformedGroup = this.transformGroupDates(updatedGroup)
 
+    // Emit real-time group update to all members
+    try {
+      await socketService.emitGroupUpdate(groupId, transformedGroup)
+    } catch (error) {
+      console.error('Failed to emit group update:', error)
+    }
+
     this.sendSuccess(res, transformedGroup, 'Group updated successfully')
   })
 
@@ -208,6 +223,14 @@ export class GroupController extends BaseController {
 
     const transformedGroup = this.transformGroupDates(updatedGroup)
 
+    // Emit real-time member joined event
+    try {
+      const newMember = transformedGroup.members.find((m: any) => m.userId === body.memberId)
+      await socketService.emitMemberJoined(groupId, newMember, transformedGroup)
+    } catch (error) {
+      console.error('Failed to emit member joined:', error)
+    }
+
     this.sendSuccess(res, transformedGroup, 'Member added successfully')
   })
 
@@ -235,6 +258,13 @@ export class GroupController extends BaseController {
     const updatedGroup = await groupService.removeMember(groupId, userId, memberId)
 
     const transformedGroup = this.transformGroupDates(updatedGroup)
+
+    // Emit real-time member left event
+    try {
+      await socketService.emitMemberLeft(groupId, memberId, transformedGroup)
+    } catch (error) {
+      console.error('Failed to emit member left:', error)
+    }
 
     this.sendSuccess(res, transformedGroup, 'Member removed successfully')
   })

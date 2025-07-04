@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import { app } from './app';
 import { createServer } from 'http';
-import { setupSocketIO } from './socket';
+import { initializeSocketIO } from './socket';
 import { connectRedis } from './config/redis';
 import { logger } from './utils/logger';
 import { prisma } from '@chatapp/database';
+import { socketService } from './services/socket.service';
 
 const PORT = process.env.PORT || 4000;
 
@@ -22,7 +23,10 @@ async function startServer() {
     const httpServer = createServer(app);
 
     // Setup Socket.IO
-    const io = setupSocketIO(httpServer, redisClient);
+    const io = initializeSocketIO(httpServer);
+    
+    // Initialize Socket Service
+    socketService.initialize(io);
     logger.info('✅ Socket.IO configured successfully');
 
     // Start server

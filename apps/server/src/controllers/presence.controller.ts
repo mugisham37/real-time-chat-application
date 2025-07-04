@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { z } from 'zod'
 import { BaseController } from './base.controller'
 import { presenceService } from '../services/presence.service'
+import { socketService } from '../services/socket.service'
 
 /**
  * Presence Controller
@@ -44,6 +45,13 @@ export class PresenceController extends BaseController {
     const transformedPresence = {
       ...presence,
       lastSeen: presence.lastSeen.toISOString()
+    }
+
+    // Emit real-time presence update
+    try {
+      await socketService.emitPresenceUpdate(userId, transformedPresence.status, transformedPresence)
+    } catch (error) {
+      console.error('Failed to emit presence update:', error)
     }
 
     this.sendSuccess(res, transformedPresence, 'Presence updated successfully')
@@ -173,6 +181,13 @@ export class PresenceController extends BaseController {
     })
 
     await presenceService.setTypingIndicator(userId, body.conversationId, body.isTyping)
+
+    // Emit real-time typing status
+    try {
+      await socketService.emitTypingStatus(body.conversationId, userId, body.isTyping)
+    } catch (error) {
+      console.error('Failed to emit typing status:', error)
+    }
 
     this.sendSuccess(res, {
       userId,
