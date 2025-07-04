@@ -469,6 +469,17 @@ export class UserRepository {
   }
 
   /**
+   * Get total users count
+   */
+  async count(): Promise<number> {
+    try {
+      return await prisma.user.count();
+    } catch (error) {
+      throw new Error(`Error getting users count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Get online users count
    */
   async getOnlineUsersCount(): Promise<number> {
@@ -478,6 +489,43 @@ export class UserRepository {
       });
     } catch (error) {
       throw new Error(`Error getting online users count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get repository statistics
+   */
+  async getStats(): Promise<{
+    total: number;
+    online: number;
+    verified: number;
+    recentlyActive: number;
+    withTwoFactor: number;
+  }> {
+    try {
+      const [total, online, verified, recentlyActive, withTwoFactor] = await Promise.all([
+        prisma.user.count(),
+        prisma.user.count({ where: { isOnline: true } }),
+        prisma.user.count({ where: { emailVerified: { not: null } } }),
+        prisma.user.count({
+          where: {
+            lastSeen: {
+              gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+            },
+          },
+        }),
+        prisma.user.count({ where: { twoFactorEnabled: true } }),
+      ]);
+
+      return {
+        total,
+        online,
+        verified,
+        recentlyActive,
+        withTwoFactor,
+      };
+    } catch (error) {
+      throw new Error(`Error getting user stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

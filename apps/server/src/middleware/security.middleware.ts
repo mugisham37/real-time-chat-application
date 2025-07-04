@@ -1,512 +1,523 @@
-import type { Request, Response, NextFunction } from 'express';
-import helmet from 'helmet';
-import cors from 'cors';
-import { ApiError } from './errorHandler';
-import { logger } from '../utils/logger';
+import { Request, Response, NextFunction } from 'express';
+import { config } from '../config';
+import { logger, securityLogger } from '../utils/logger';
+import { ApiError } from '../utils/apiError';
+import { 
+  encryption,
+  messageEncryption,
+  sessionSecurity,
+  fieldEncryption,
+  apiSecurity
+} from '../security/encryption';
+import {
+  isIpBlocked,
+  isAccountBlocked,
+  burstProtection,
+  trackFailedLogin,
+  resetFailedLogins
+} from '../security/rateLimiting';
 
 /**
- * CORS configuration
+ * Enhanced Security Middleware integrating encryption and rate limiting
+ * Provides comprehensive security features for the chat application
  */
-const corsOptions: cors.CorsOptions = {
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
 
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://localhost:3000',
-      'https://localhost:3001',
-      // Add production domains here
-      process.env.CLIENT_URL,
-      process.env.FRONTEND_URL,
-    ].filter(Boolean);
+// Security headers middleware
+export const securityHeaders = (req: Request, res: Response, next: NextFunction) => {
+  // Set security headers
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'X-XSS-Protection': '1; mode=block',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ws: wss:;",
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  });
 
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      logger.warn('CORS blocked request from origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Origin',
-    'X-Requested-With',
-    'Content-Type',
-    'Accept',
-    'Authorization',
-    'X-API-Key',
-    'X-Client-Version',
-    'X-Request-ID',
-  ],
-  exposedHeaders: [
-    'X-Total-Count',
-    'X-Page-Count',
-    'X-Current-Page',
-    'X-Rate-Limit-Remaining',
-    'X-Rate-Limit-Reset',
-  ],
-  maxAge: 86400, // 24 hours
-};
-
-/**
- * Helmet security configuration
- */
-const helmetOptions = {
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'", 'ws:', 'wss:'],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-    },
-  },
-  crossOriginEmbedderPolicy: false, // Disable for Socket.IO compatibility
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true,
-  },
-};
-
-/**
- * Apply CORS middleware
- */
-export const applyCors = cors(corsOptions);
-
-/**
- * Apply Helmet security middleware
- */
-export const applyHelmet = helmet(helmetOptions);
-
-/**
- * Request ID middleware for tracing
- */
-export const requestId = (req: Request, res: Response, next: NextFunction): void => {
-  const requestId = req.headers['x-request-id'] as string || 
-    `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  req.headers['x-request-id'] = requestId;
-  res.setHeader('X-Request-ID', requestId);
-  
-  // Add to logger context
-  (req as any).requestId = requestId;
-  
-  next();
-};
-
-/**
- * API Key validation middleware
- */
-export const validateApiKey = (req: Request, res: Response, next: NextFunction): void => {
-  const apiKey = req.headers['x-api-key'] as string;
-  const validApiKeys = process.env.API_KEYS?.split(',') || [];
-
-  if (!apiKey) {
-    return next(ApiError.unauthorized('API key is required'));
-  }
-
-  if (!validApiKeys.includes(apiKey)) {
-    logger.warn('Invalid API key attempt:', {
-      apiKey: apiKey.substring(0, 8) + '...',
-      ip: req.ip,
-      userAgent: req.get('User-Agent'),
-    });
-    return next(ApiError.unauthorized('Invalid API key'));
-  }
-
-  next();
-};
-
-/**
- * IP whitelist middleware
- */
-export const ipWhitelist = (allowedIPs: string[]) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const clientIP = req.ip || req.connection.remoteAddress || '';
-    
-    if (!allowedIPs.includes(clientIP)) {
-      logger.warn('IP not in whitelist:', {
-        ip: clientIP,
-        userAgent: req.get('User-Agent'),
-        url: req.url,
-      });
-      return next(ApiError.forbidden('Access denied from this IP address'));
-    }
-
-    next();
-  };
-};
-
-/**
- * User agent validation middleware
- */
-export const validateUserAgent = (req: Request, res: Response, next: NextFunction): void => {
-  const userAgent = req.get('User-Agent');
-  
-  if (!userAgent) {
-    return next(ApiError.badRequest('User-Agent header is required'));
-  }
-
-  // Block known bad user agents
-  const blockedUserAgents = [
-    /bot/i,
-    /crawler/i,
-    /spider/i,
-    /scraper/i,
-    // Add more patterns as needed
-  ];
-
-  const isBlocked = blockedUserAgents.some(pattern => pattern.test(userAgent));
-  
-  if (isBlocked) {
-    logger.warn('Blocked user agent:', {
-      userAgent,
-      ip: req.ip,
-      url: req.url,
-    });
-    return next(ApiError.forbidden('Access denied'));
-  }
-
-  next();
-};
-
-/**
- * Request size limiter middleware
- */
-export const limitRequestSize = (maxSize: number = 10 * 1024 * 1024) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const contentLength = parseInt(req.get('Content-Length') || '0', 10);
-    
-    if (contentLength > maxSize) {
-      return next(ApiError.badRequest(`Request too large. Maximum size: ${maxSize} bytes`));
-    }
-
-    next();
-  };
-};
-
-/**
- * Request timeout middleware
- */
-export const requestTimeout = (timeoutMs: number = 30000) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const timeout = setTimeout(() => {
-      if (!res.headersSent) {
-        logger.warn('Request timeout:', {
-          url: req.url,
-          method: req.method,
-          timeout: timeoutMs,
-        });
-        next(ApiError.internal('Request timeout'));
-      }
-    }, timeoutMs);
-
-    // Clear timeout when response is finished
-    res.on('finish', () => clearTimeout(timeout));
-    res.on('close', () => clearTimeout(timeout));
-
-    next();
-  };
-};
-
-/**
- * Content type validation middleware
- */
-export const validateContentType = (allowedTypes: string[]) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const contentType = req.get('Content-Type');
-    
-    if (!contentType) {
-      return next(ApiError.badRequest('Content-Type header is required'));
-    }
-
-    const isAllowed = allowedTypes.some(type => contentType.includes(type));
-    
-    if (!isAllowed) {
-      return next(ApiError.badRequest(`Invalid Content-Type. Allowed: ${allowedTypes.join(', ')}`));
-    }
-
-    next();
-  };
-};
-
-/**
- * Security headers middleware
- */
-export const securityHeaders = (req: Request, res: Response, next: NextFunction): void => {
   // Remove server information
   res.removeHeader('X-Powered-By');
-  
-  // Add security headers
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-  
-  // Add custom security headers
-  res.setHeader('X-API-Version', process.env.API_VERSION || '1.0.0');
-  res.setHeader('X-Server-Time', new Date().toISOString());
+  res.removeHeader('Server');
 
   next();
 };
 
-/**
- * Request logging middleware for security monitoring
- */
-export const securityLogger = (req: Request, res: Response, next: NextFunction): void => {
-  const startTime = Date.now();
-  
-  // Log request details
-  logger.info('Incoming request:', {
-    method: req.method,
-    url: req.url,
-    ip: req.ip,
-    userAgent: req.get('User-Agent'),
-    referer: req.get('Referer'),
-    requestId: (req as any).requestId,
-    timestamp: new Date().toISOString(),
-  });
-
-  // Log response when finished
-  res.on('finish', () => {
-    const duration = Date.now() - startTime;
+// IP blocking middleware
+export const ipBlockingMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
     
-    logger.info('Request completed:', {
-      method: req.method,
-      url: req.url,
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
-      requestId: (req as any).requestId,
-    });
-
-    // Log suspicious activity
-    if (res.statusCode >= 400) {
-      logger.warn('Error response:', {
+    if (await isIpBlocked(ip)) {
+      securityLogger.logSuspiciousActivity('blocked_ip_access_attempt', {
+        ip,
+        userAgent: req.get('User-Agent'),
+        path: req.path,
         method: req.method,
-        url: req.url,
-        statusCode: res.statusCode,
+      });
+      
+      throw ApiError.forbidden('Access denied from this IP address');
+    }
+    
+    next();
+  } catch (error) {
+    if (error instanceof ApiError) {
+      next(error);
+    } else {
+      logger.error('IP blocking middleware error:', error);
+      next();
+    }
+  }
+};
+
+// Account blocking middleware
+export const accountBlockingMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = (req as any).user;
+    
+    if (user && await isAccountBlocked(user.id)) {
+      securityLogger.logSuspiciousActivity('blocked_account_access_attempt', {
+        userId: user.id,
+        email: user.email,
         ip: req.ip,
         userAgent: req.get('User-Agent'),
-        requestId: (req as any).requestId,
+        path: req.path,
       });
-    }
-  });
-
-  next();
-};
-
-/**
- * Honeypot middleware to catch bots
- */
-export const honeypot = (req: Request, res: Response, next: NextFunction): void => {
-  // Check for honeypot fields in request body
-  const honeypotFields = ['website', 'url', 'homepage', 'link'];
-  
-  if (req.body) {
-    for (const field of honeypotFields) {
-      if (req.body[field]) {
-        logger.warn('Honeypot triggered:', {
-          field,
-          value: req.body[field],
-          ip: req.ip,
-          userAgent: req.get('User-Agent'),
-        });
-        return next(ApiError.forbidden('Access denied'));
-      }
-    }
-  }
-
-  next();
-};
-
-/**
- * Brute force protection middleware
- */
-export const bruteForceProtection = (options: {
-  maxAttempts: number;
-  windowMs: number;
-  blockDurationMs: number;
-}) => {
-  const attempts = new Map<string, {
-    count: number;
-    firstAttempt: number;
-    blockedUntil?: number;
-  }>();
-
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const key = req.ip || 'unknown';
-    const now = Date.now();
-    
-    let attemptData = attempts.get(key);
-    
-    // Clean up old entries
-    if (attemptData && now - attemptData.firstAttempt > options.windowMs) {
-      attempts.delete(key);
-      attemptData = undefined;
-    }
-
-    // Check if currently blocked
-    if (attemptData?.blockedUntil && now < attemptData.blockedUntil) {
-      const remainingTime = Math.ceil((attemptData.blockedUntil - now) / 1000);
-      return next(ApiError.tooManyRequests(`Blocked for ${remainingTime} seconds`));
-    }
-
-    // Initialize or increment attempts
-    if (!attemptData) {
-      attempts.set(key, {
-        count: 1,
-        firstAttempt: now,
-      });
-    } else {
-      attemptData.count++;
       
-      // Block if too many attempts
-      if (attemptData.count > options.maxAttempts) {
-        attemptData.blockedUntil = now + options.blockDurationMs;
+      throw ApiError.forbidden('Account is temporarily blocked');
+    }
+    
+    next();
+  } catch (error) {
+    if (error instanceof ApiError) {
+      next(error);
+    } else {
+      logger.error('Account blocking middleware error:', error);
+      next();
+    }
+  }
+};
+
+// Request signature validation middleware
+export const requestSignatureMiddleware = (options?: {
+  requireSignature?: boolean;
+  maxAge?: number;
+}) => {
+  const requireSignature = options?.requireSignature || false;
+  const maxAge = options?.maxAge || 300000; // 5 minutes
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const signature = req.get('X-Signature');
+      const timestamp = req.get('X-Timestamp');
+      const apiKey = req.get('X-API-Key');
+
+      // Skip if signature not required and not provided
+      if (!requireSignature && !signature) {
+        return next();
+      }
+
+      if (requireSignature && (!signature || !timestamp || !apiKey)) {
+        throw ApiError.unauthorized('Request signature required');
+      }
+
+      if (signature && timestamp && apiKey) {
+        // Validate API key
+        const keyData = apiSecurity.validateApiKey(apiKey);
+        if (!keyData) {
+          throw ApiError.unauthorized('Invalid API key');
+        }
+
+        // Get request body
+        const body = JSON.stringify(req.body || {});
+        const timestampNum = parseInt(timestamp);
+
+        // Verify signature
+        const isValid = apiSecurity.verifyRequestSignature(
+          req.method,
+          req.originalUrl,
+          body,
+          timestampNum,
+          signature,
+          config.encryption.secret,
+          maxAge
+        );
+
+        if (!isValid) {
+          securityLogger.logSuspiciousActivity('invalid_request_signature', {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            path: req.path,
+            method: req.method,
+            apiKey: apiKey.substring(0, 10) + '...',
+          });
+          
+          throw ApiError.unauthorized('Invalid request signature');
+        }
+
+        // Attach API key data to request
+        (req as any).apiKeyData = keyData;
+      }
+
+      next();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        next(error);
+      } else {
+        logger.error('Request signature middleware error:', error);
+        next();
+      }
+    }
+  };
+};
+
+// Session security middleware
+export const sessionSecurityMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sessionToken = req.get('X-Session-Token') || req.cookies?.sessionToken;
+    
+    if (sessionToken) {
+      const sessionData = sessionSecurity.decryptSessionData(sessionToken);
+      
+      if (!sessionData) {
+        // Invalid or expired session
+        res.clearCookie('sessionToken');
+        throw ApiError.unauthorized('Invalid or expired session');
+      }
+      
+      // Attach session data to request
+      (req as any).sessionData = sessionData;
+      
+      // Refresh session if needed (extend expiry)
+      const now = Date.now();
+      const sessionAge = now - sessionData.createdAt;
+      const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
+      
+      if (sessionAge > maxAge / 2) { // Refresh when half expired
+        const newSessionData = {
+          ...sessionData,
+          createdAt: now,
+          expiresAt: now + maxAge,
+        };
         
-        logger.warn('Brute force protection triggered:', {
-          ip: key,
-          attempts: attemptData.count,
-          blockedUntil: new Date(attemptData.blockedUntil).toISOString(),
+        const newToken = sessionSecurity.encryptSessionData(newSessionData);
+        res.cookie('sessionToken', newToken, {
+          httpOnly: true,
+          secure: config.isProduction,
+          sameSite: 'strict',
+          maxAge,
+        });
+      }
+    }
+    
+    next();
+  } catch (error) {
+    if (error instanceof ApiError) {
+      next(error);
+    } else {
+      logger.error('Session security middleware error:', error);
+      next();
+    }
+  }
+};
+
+// Message encryption middleware
+export const messageEncryptionMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = (req as any).user;
+    
+    if (req.body && req.body.content && user) {
+      // Encrypt message content if it's a message creation/update
+      if (req.path.includes('/messages') && (req.method === 'POST' || req.method === 'PUT')) {
+        const conversationId = req.body.conversationId || req.params.conversationId;
+        
+        if (conversationId) {
+          // Encrypt the message content
+          req.body.encryptedContent = messageEncryption.encryptMessage(
+            req.body.content,
+            user.id,
+            conversationId
+          );
+          
+          // Keep original content for processing but mark as encrypted
+          req.body._isEncrypted = true;
+        }
+      }
+    }
+    
+    next();
+  } catch (error) {
+    logger.error('Message encryption middleware error:', error);
+    next();
+  }
+};
+
+// Data encryption middleware for sensitive fields
+export const dataEncryptionMiddleware = (fieldsToEncrypt: string[] = []) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (req.body && fieldsToEncrypt.length > 0) {
+        req.body = fieldEncryption.encryptUserFields(req.body, fieldsToEncrypt);
+      }
+      
+      next();
+    } catch (error) {
+      logger.error('Data encryption middleware error:', error);
+      next();
+    }
+  };
+};
+
+// Data decryption middleware for responses
+export const dataDecryptionMiddleware = (fieldsToDecrypt: string[] = []) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Override res.json to decrypt data before sending
+      const originalJson = res.json;
+      
+      res.json = function(data: any) {
+        if (data && fieldsToDecrypt.length > 0) {
+          if (Array.isArray(data)) {
+            data = data.map(item => fieldEncryption.decryptUserFields(item, fieldsToDecrypt));
+          } else if (typeof data === 'object') {
+            data = fieldEncryption.decryptUserFields(data, fieldsToDecrypt);
+          }
+        }
+        
+        return originalJson.call(this, data);
+      };
+      
+      next();
+    } catch (error) {
+      logger.error('Data decryption middleware error:', error);
+      next();
+    }
+  };
+};
+
+// Burst protection middleware
+export const burstProtectionMiddleware = (threshold: number = 100) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ip = req.ip || 'unknown';
+      const key = `burst:${ip}`;
+      
+      const burstResult = await burstProtection.detectBurst(key, threshold, 10);
+      
+      if (burstResult.isBurst) {
+        await burstProtection.applyBurstProtection(key, burstResult.burstLevel);
+        
+        securityLogger.logSuspiciousActivity('burst_detected', {
+          ip,
+          burstLevel: burstResult.burstLevel,
+          requestCount: burstResult.requestCount,
+          userAgent: req.get('User-Agent'),
+          path: req.path,
         });
         
-        return next(ApiError.tooManyRequests('Too many failed attempts'));
+        throw ApiError.rateLimitExceeded(60, {
+          burstLevel: burstResult.burstLevel,
+          requestCount: burstResult.requestCount,
+        });
+      }
+      
+      next();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        next(error);
+      } else {
+        logger.error('Burst protection middleware error:', error);
+        next();
       }
     }
+  };
+};
 
-    // Reset on successful response
-    res.on('finish', () => {
-      if (res.statusCode < 400) {
-        attempts.delete(key);
+// Authentication tracking middleware
+export const authTrackingMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ip = req.ip || 'unknown';
+    const userAgent = req.get('User-Agent') || 'unknown';
+    
+    // Track authentication attempts on response
+    res.on('finish', async () => {
+      const email = req.body?.email;
+      
+      if (req.path.includes('/auth/login') || req.path.includes('/auth/register')) {
+        const success = res.statusCode >= 200 && res.statusCode < 300;
+        
+        if (email) {
+          securityLogger.logAuthAttempt(success, email, ip, userAgent);
+          
+          if (!success && req.path.includes('/auth/login')) {
+            await trackFailedLogin(email, ip);
+          } else if (success && req.path.includes('/auth/login')) {
+            await resetFailedLogins(email);
+          }
+        }
       }
     });
-
+    
     next();
-  };
+  } catch (error) {
+    logger.error('Auth tracking middleware error:', error);
+    next();
+  }
 };
 
-/**
- * SQL injection detection middleware
- */
-export const sqlInjectionProtection = (req: Request, res: Response, next: NextFunction): void => {
-  const sqlPatterns = [
-    /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT)\b)/gi,
-    /(\b(OR|AND)\s+\d+\s*=\s*\d+)/gi,
-    /(\'|\"|;|--|\*|\|)/g,
-    /(\b(WAITFOR|DELAY)\b)/gi,
-  ];
-
-  const checkForSqlInjection = (obj: any, path: string = ''): boolean => {
-    if (typeof obj === 'string') {
-      return sqlPatterns.some(pattern => pattern.test(obj));
+// Content sanitization middleware
+export const contentSanitizationMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (req.body) {
+      // Sanitize string fields to prevent XSS
+      const sanitizeObject = (obj: any): any => {
+        if (typeof obj === 'string') {
+          return obj
+            .replace(/[<>]/g, '') // Remove angle brackets
+            .replace(/javascript:/gi, '') // Remove javascript: protocol
+            .replace(/on\w+=/gi, '') // Remove event handlers
+            .trim();
+        } else if (Array.isArray(obj)) {
+          return obj.map(sanitizeObject);
+        } else if (typeof obj === 'object' && obj !== null) {
+          const sanitized: any = {};
+          for (const [key, value] of Object.entries(obj)) {
+            sanitized[key] = sanitizeObject(value);
+          }
+          return sanitized;
+        }
+        return obj;
+      };
+      
+      req.body = sanitizeObject(req.body);
     }
     
-    if (Array.isArray(obj)) {
-      return obj.some((item, index) => 
-        checkForSqlInjection(item, `${path}[${index}]`)
-      );
-    }
-    
-    if (obj && typeof obj === 'object') {
-      return Object.entries(obj).some(([key, value]) => 
-        checkForSqlInjection(value, path ? `${path}.${key}` : key)
-      );
-    }
-    
-    return false;
-  };
-
-  // Check request body and query parameters
-  if (checkForSqlInjection(req.body) || checkForSqlInjection(req.query)) {
-    logger.warn('SQL injection attempt detected:', {
-      ip: req.ip,
-      userAgent: req.get('User-Agent'),
-      url: req.url,
-      body: req.body,
-      query: req.query,
-    });
-    
-    return next(ApiError.badRequest('Invalid request data'));
+    next();
+  } catch (error) {
+    logger.error('Content sanitization middleware error:', error);
+    next();
   }
+};
 
+// File upload security middleware
+export const fileUploadSecurityMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (req.file || req.files) {
+      const files = req.files ? (Array.isArray(req.files) ? req.files : Object.values(req.files).flat()) : [req.file];
+      
+      for (const file of files) {
+        if (file) {
+          // Check file type
+          const allowedTypes = [
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+            'video/mp4', 'video/webm',
+            'audio/mpeg', 'audio/wav', 'audio/ogg',
+            'application/pdf', 'text/plain'
+          ];
+          
+          if (!allowedTypes.includes(file.mimetype)) {
+            throw ApiError.unsupportedFileType(allowedTypes);
+          }
+          
+          // Check file size (100MB max)
+          if (file.size > 100 * 1024 * 1024) {
+            throw ApiError.fileTooLarge('100MB');
+          }
+          
+          // Sanitize filename
+          if (file.originalname) {
+            file.originalname = file.originalname
+              .replace(/[^a-zA-Z0-9._-]/g, '_')
+              .substring(0, 255);
+          }
+        }
+      }
+    }
+    
+    next();
+  } catch (error) {
+    if (error instanceof ApiError) {
+      next(error);
+    } else {
+      logger.error('File upload security middleware error:', error);
+      next();
+    }
+  }
+};
+
+// Request logging middleware
+export const requestLoggingMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  const start = Date.now();
+  const requestId = encryption.generateSecureToken(16);
+  
+  // Add request ID to request
+  (req as any).requestId = requestId;
+  
+  // Log request
+  logger.info('Incoming request', {
+    requestId,
+    method: req.method,
+    url: req.originalUrl,
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    userId: (req as any).user?.id,
+  });
+  
+  // Log response
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    
+    logger.info('Request completed', {
+      requestId,
+      method: req.method,
+      url: req.originalUrl,
+      statusCode: res.statusCode,
+      duration,
+      ip: req.ip,
+      userId: (req as any).user?.id,
+    });
+  });
+  
   next();
 };
 
-/**
- * XSS protection middleware
- */
-export const xssProtection = (req: Request, res: Response, next: NextFunction): void => {
-  const xssPatterns = [
-    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
-    /<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi,
-    /javascript:/gi,
-    /on\w+\s*=/gi,
-    /<img[^>]+src[\\s]*=[\\s]*["\']javascript:/gi,
-  ];
-
-  const checkForXss = (obj: any): boolean => {
-    if (typeof obj === 'string') {
-      return xssPatterns.some(pattern => pattern.test(obj));
-    }
-    
-    if (Array.isArray(obj)) {
-      return obj.some(item => checkForXss(item));
-    }
-    
-    if (obj && typeof obj === 'object') {
-      return Object.values(obj).some(value => checkForXss(value));
-    }
-    
-    return false;
-  };
-
-  if (checkForXss(req.body) || checkForXss(req.query)) {
-    logger.warn('XSS attempt detected:', {
-      ip: req.ip,
-      userAgent: req.get('User-Agent'),
-      url: req.url,
-    });
-    
-    return next(ApiError.badRequest('Invalid request data'));
+// CORS security middleware
+export const corsSecurityMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  const origin = req.get('Origin');
+  const allowedOrigins = [config.server.corsOrigin, config.server.clientUrl];
+  
+  if (origin && allowedOrigins.includes(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
   }
-
+  
+  res.set({
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-API-Key, X-Signature, X-Timestamp',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400', // 24 hours
+  });
+  
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
   next();
 };
 
-/**
- * Combined security middleware stack
- */
-export const securityStack = [
-  requestId,
+// Export all security middleware
+export default {
   securityHeaders,
-  applyCors,
-  applyHelmet,
-  securityLogger,
-  limitRequestSize(),
-  requestTimeout(),
-  honeypot,
-  sqlInjectionProtection,
-  xssProtection,
-];
-
-/**
- * Admin-only security middleware stack
- */
-export const adminSecurityStack = [
-  ...securityStack,
-  validateApiKey,
-  bruteForceProtection({
-    maxAttempts: 3,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 60 * 60 * 1000, // 1 hour
-  }),
-];
+  ipBlockingMiddleware,
+  accountBlockingMiddleware,
+  requestSignatureMiddleware,
+  sessionSecurityMiddleware,
+  messageEncryptionMiddleware,
+  dataEncryptionMiddleware,
+  dataDecryptionMiddleware,
+  burstProtectionMiddleware,
+  authTrackingMiddleware,
+  contentSanitizationMiddleware,
+  fileUploadSecurityMiddleware,
+  requestLoggingMiddleware,
+  corsSecurityMiddleware,
+};

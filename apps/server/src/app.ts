@@ -4,8 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
 import { errorHandler } from './middleware/errorHandler';
-import { notFoundHandler } from './middleware/notFoundHandler';
-import { rateLimiter } from './middleware/rateLimiter';
+import { apiRateLimiter } from './middleware/rateLimiter';
 import { logger } from './utils/logger';
 import routes from './routes';
 
@@ -53,7 +52,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Rate limiting
-app.use(rateLimiter);
+app.use(apiRateLimiter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -72,7 +71,17 @@ app.use('/api', routes);
 app.use('/uploads', express.static('uploads'));
 
 // 404 handler
-app.use(notFoundHandler);
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: 'NOT_FOUND',
+      message: 'The requested resource was not found',
+      path: req.path,
+      method: req.method,
+    },
+  });
+});
 
 // Global error handler
 app.use(errorHandler);

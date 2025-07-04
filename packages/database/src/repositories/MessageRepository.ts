@@ -1768,6 +1768,82 @@ export class MessageRepository {
       throw new Error(`Error finding scheduled messages by conversation: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Get total messages count
+   */
+  async count(): Promise<number> {
+    try {
+      return await prisma.message.count({
+        where: { isDeleted: false }
+      });
+    } catch (error) {
+      throw new Error(`Error getting messages count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get repository statistics
+   */
+  async getStats(): Promise<{
+    total: number;
+    byType: Record<string, number>;
+    withAttachments: number;
+    withReactions: number;
+    deleted: number;
+    scheduled: number;
+  }> {
+    try {
+      const [total, byType, withAttachments, withReactions, deleted, scheduled] = await Promise.all([
+        prisma.message.count({ where: { isDeleted: false } }),
+        prisma.message.groupBy({
+          by: ['type'],
+          where: { isDeleted: false },
+          _count: { type: true },
+        }),
+        prisma.message.count({
+          where: {
+            isDeleted: false,
+            attachments: {
+              some: {}
+            }
+          }
+        }),
+        prisma.message.count({
+          where: {
+            isDeleted: false,
+            reactions: {
+              some: {}
+            }
+          }
+        }),
+        prisma.message.count({ where: { isDeleted: true } }),
+        prisma.message.count({
+          where: {
+            status: {
+              in: ['SCHEDULED', 'PENDING']
+            }
+          }
+        }),
+      ]);
+
+      const typeStats = byType.reduce((acc: Record<string, number>, item: any) => {
+        acc[item.type] = item._count.type;
+        return acc;
+      }, {} as Record<string, number>);
+
+      return {
+        total,
+        byType: typeStats,
+        withAttachments,
+        withReactions,
+        deleted,
+        scheduled,
+      };
+    } catch (error) {
+      throw new Error(`Error getting message stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
 
 // Export singleton instance

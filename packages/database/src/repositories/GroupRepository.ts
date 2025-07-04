@@ -873,6 +873,63 @@ export class GroupRepository {
       throw new Error(`Error getting popular groups: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Get total groups count
+   */
+  async count(): Promise<number> {
+    try {
+      return await prisma.group.count({
+        where: { isActive: true }
+      });
+    } catch (error) {
+      throw new Error(`Error getting groups count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get repository statistics
+   */
+  async getStats(): Promise<{
+    total: number;
+    public: number;
+    private: number;
+    active: number;
+    withMembers: number;
+    averageMembersPerGroup: number;
+  }> {
+    try {
+      const [total, publicGroups, privateGroups, active, withMembers, memberStats] = await Promise.all([
+        prisma.group.count(),
+        prisma.group.count({ where: { isPrivate: false } }),
+        prisma.group.count({ where: { isPrivate: true } }),
+        prisma.group.count({ where: { isActive: true } }),
+        prisma.group.count({
+          where: {
+            members: {
+              some: {}
+            }
+          }
+        }),
+        prisma.groupMember.count(),
+      ]);
+
+      const averageMembersPerGroup = memberStats > 0 && total > 0
+        ? Math.round((memberStats / total) * 100) / 100 
+        : 0;
+
+      return {
+        total,
+        public: publicGroups,
+        private: privateGroups,
+        active,
+        withMembers,
+        averageMembersPerGroup,
+      };
+    } catch (error) {
+      throw new Error(`Error getting group stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
 
 // Export singleton instance

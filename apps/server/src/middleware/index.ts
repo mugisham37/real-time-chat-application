@@ -1,28 +1,54 @@
 /**
- * Middleware exports
- * Central export file for all middleware modules
+ * Enhanced Middleware exports with integrated security and rate limiting
+ * Central export file for all middleware modules with comprehensive security features
  */
 
-// Error handling middleware
+// Core middleware exports
 export * from './errorHandler';
-
-// Authentication and authorization middleware
 export * from './auth';
-
-// Validation middleware
 export * from './validation.middleware';
-
-// Cache middleware
 export * from './cache.middleware';
-
-// Upload middleware
 export * from './upload.middleware';
 
-// Security middleware
+// Enhanced security and rate limiting exports
 export * from './security.middleware';
+export * from './rateLimiter';
 
+// Import enhanced security and rate limiting middleware
+import {
+  securityHeaders,
+  ipBlockingMiddleware,
+  accountBlockingMiddleware,
+  requestSignatureMiddleware,
+  sessionSecurityMiddleware,
+  messageEncryptionMiddleware,
+  dataEncryptionMiddleware,
+  dataDecryptionMiddleware,
+  burstProtectionMiddleware,
+  authTrackingMiddleware,
+  contentSanitizationMiddleware,
+  fileUploadSecurityMiddleware,
+  requestLoggingMiddleware,
+  corsSecurityMiddleware,
+} from './security.middleware';
 
-// Re-export commonly used middleware combinations
+import {
+  apiRateLimiter,
+  authRateLimiter,
+  uploadRateLimiter,
+  messageRateLimiter,
+  searchRateLimiter,
+  passwordResetRateLimiter,
+  registrationRateLimiter,
+  websocketRateLimiter,
+  adminRateLimiter,
+  bruteForceProtection,
+  adaptiveApiRateLimiter,
+  getRateLimitStatus,
+  clearRateLimits,
+} from './rateLimiter';
+
+// Import existing middleware
 import {
   authenticate,
   optionalAuth,
@@ -62,237 +88,326 @@ import {
   cleanupUploadedFiles,
 } from './upload.middleware';
 
-import {
-  securityStack,
-  adminSecurityStack,
-  applyCors,
-  requestId,
-  securityHeaders,
-  bruteForceProtection,
-} from './security.middleware';
-
 import { errorHandler, ApiError } from './errorHandler';
 
-// Create rate limiter functions (will be moved to separate file later)
-const createRateLimiter = (windowMs: number, max: number, message: string) => {
-  const requests = new Map<string, { count: number; resetTime: number }>();
-  
-  return (req: any, res: any, next: any) => {
-    const key = req.ip || 'unknown';
-    const now = Date.now();
-    const windowStart = now - windowMs;
-
-    // Clean up old entries
-    for (const [k, v] of requests.entries()) {
-      if (v.resetTime < windowStart) {
-        requests.delete(k);
-      }
-    }
-
-    // Get or create request data
-    let requestData = requests.get(key);
-    if (!requestData || requestData.resetTime < windowStart) {
-      requestData = { count: 0, resetTime: now + windowMs };
-      requests.set(key, requestData);
-    }
-
-    // Increment request count
-    requestData.count++;
-
-    // Check if limit exceeded
-    if (requestData.count > max) {
-      return next(ApiError.tooManyRequests(message));
-    }
-
-    next();
-  };
-};
-
-// Rate limiter instances
-const rateLimiter = createRateLimiter(15 * 60 * 1000, 100, 'Too many requests, please try again later');
-const authRateLimiter = createRateLimiter(15 * 60 * 1000, 5, 'Too many login attempts, please try again later');
-const uploadRateLimiter = createRateLimiter(15 * 60 * 1000, 10, 'Too many upload attempts, please try again later');
-
-// Not found handler
-const notFoundHandler = (req: any, res: any) => {
-  res.status(404).json({
-    success: false,
-    error: {
-      code: 'NOT_FOUND',
-      message: `Route ${req.method} ${req.path} not found`,
-    },
-  });
-};
-
 /**
- * Common middleware stacks for different route types
+ * Enhanced Security Middleware Stacks
+ * These stacks integrate encryption, rate limiting, and comprehensive security features
  */
 
-// Basic middleware stack for all routes
-export const basicMiddleware = [
-  requestId,
+// Core security middleware stack (applied to all routes)
+export const coreSecurityStack = [
+  requestLoggingMiddleware,
+  corsSecurityMiddleware,
   securityHeaders,
-  applyCors,
-  sanitizeRequest,
+  ipBlockingMiddleware,
+  contentSanitizationMiddleware,
+  burstProtectionMiddleware(50), // Lower threshold for general protection
 ];
 
-// Authentication required middleware stack
-export const authMiddleware = [
-  ...basicMiddleware,
-  authenticate,
+// Basic API middleware stack with rate limiting
+export const basicApiStack = [
+  ...coreSecurityStack,
+  apiRateLimiter,
+  sessionSecurityMiddleware,
 ];
 
-// Optional authentication middleware stack
-export const optionalAuthMiddleware = [
-  ...basicMiddleware,
-  optionalAuth,
-];
-
-// Admin routes middleware stack
-export const adminMiddleware = [
-  ...adminSecurityStack,
-  authenticate,
-  authorize(['admin']),
-];
-
-// API routes middleware stack with rate limiting
-export const apiMiddleware = [
-  ...basicMiddleware,
-  rateLimiter,
-  authenticate,
-];
-
-// Public API routes (no auth required)
-export const publicApiMiddleware = [
-  ...basicMiddleware,
-  rateLimiter,
-];
-
-// Auth routes middleware stack (login, register, etc.)
-export const authRoutesMiddleware = [
-  ...basicMiddleware,
+// Authentication middleware stack with enhanced security
+export const authenticationStack = [
+  ...coreSecurityStack,
   authRateLimiter,
-  bruteForceProtection({
-    maxAttempts: 5,
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDurationMs: 30 * 60 * 1000, // 30 minutes
-  }),
+  authTrackingMiddleware,
+  bruteForceProtection(),
+  sessionSecurityMiddleware,
 ];
 
-// Upload routes middleware stack
-export const uploadMiddleware = [
-  ...authMiddleware,
-  uploadRateLimiter,
+// Authenticated API middleware stack
+export const authenticatedApiStack = [
+  ...basicApiStack,
+  authenticate,
+  accountBlockingMiddleware,
 ];
 
-// Message routes middleware stack
-export const messageMiddleware = [
-  ...authMiddleware,
+// Message handling middleware stack with encryption
+export const messageStack = [
+  ...authenticatedApiStack,
+  messageRateLimiter,
+  messageEncryptionMiddleware,
   requireConversationAccess(),
 ];
 
-// Group routes middleware stack
-export const groupMiddleware = [
-  ...authMiddleware,
+// File upload middleware stack with security
+export const uploadStack = [
+  ...authenticatedApiStack,
+  uploadRateLimiter,
+  fileUploadSecurityMiddleware,
+];
+
+// Admin middleware stack with enhanced security
+export const adminStack = [
+  ...coreSecurityStack,
+  adminRateLimiter,
+  requestSignatureMiddleware({ requireSignature: true }),
+  authenticate,
+  authorize(['admin']),
+  accountBlockingMiddleware,
+];
+
+// Group management middleware stack
+export const groupStack = [
+  ...authenticatedApiStack,
   requireGroupAccess(),
 ];
 
-// User profile routes middleware stack
-export const profileMiddleware = [
-  ...authMiddleware,
+// User profile middleware stack with data encryption
+export const profileStack = [
+  ...authenticatedApiStack,
+  dataEncryptionMiddleware(['email', 'phone']),
   requireOwnership(),
 ];
 
-// Search routes middleware stack
-export const searchMiddleware = [
-  ...authMiddleware,
+// Search middleware stack with caching and rate limiting
+export const searchStack = [
+  ...authenticatedApiStack,
+  searchRateLimiter,
   cache({ ttl: 300 }), // 5 minutes cache
 ];
 
-/**
- * Middleware application helpers
- */
-
-// Apply error handling middleware (should be last)
-export const applyErrorHandling = [
-  errorHandler,
-  notFoundHandler,
+// WebSocket middleware stack
+export const websocketStack = [
+  corsSecurityMiddleware,
+  securityHeaders,
+  websocketRateLimiter,
+  ipBlockingMiddleware,
 ];
 
-// Apply upload error handling
-export const applyUploadErrorHandling = [
+// Password reset middleware stack
+export const passwordResetStack = [
+  ...coreSecurityStack,
+  passwordResetRateLimiter,
+  authTrackingMiddleware,
+];
+
+// Registration middleware stack
+export const registrationStack = [
+  ...coreSecurityStack,
+  registrationRateLimiter,
+  authTrackingMiddleware,
+];
+
+/**
+ * Specialized Middleware Combinations
+ */
+
+// High-security middleware for sensitive operations
+export const highSecurityStack = [
+  ...coreSecurityStack,
+  adaptiveApiRateLimiter,
+  requestSignatureMiddleware({ requireSignature: true }),
+  authenticate,
+  accountBlockingMiddleware,
+  burstProtectionMiddleware(25), // Stricter burst protection
+];
+
+// Public API middleware (no authentication required)
+export const publicApiStack = [
+  ...coreSecurityStack,
+  apiRateLimiter,
+];
+
+// Optional authentication middleware
+export const optionalAuthStack = [
+  ...basicApiStack,
+  optionalAuth,
+];
+
+/**
+ * Data Protection Middleware
+ */
+
+// Sensitive data encryption middleware
+export const sensitiveDataStack = [
+  ...authenticatedApiStack,
+  dataEncryptionMiddleware(['email', 'phone', 'personalInfo']),
+];
+
+// Response data decryption middleware
+export const dataDecryptionStack = [
+  dataDecryptionMiddleware(['email', 'phone', 'personalInfo']),
+];
+
+/**
+ * Route-Specific Middleware Stacks
+ */
+
+// Auth routes (login, register, password reset)
+export const authRoutes = {
+  login: [
+    ...authenticationStack,
+    validateLogin,
+  ],
+  register: [
+    ...registrationStack,
+    validateRegister,
+  ],
+  passwordReset: [
+    ...passwordResetStack,
+    validate,
+  ],
+  refreshToken: [
+    ...authenticationStack,
+    sessionSecurityMiddleware,
+  ],
+};
+
+// Message routes
+export const messageRoutes = {
+  send: [
+    ...messageStack,
+    validateSendMessage,
+  ],
+  get: [
+    ...authenticatedApiStack,
+    requireConversationAccess(),
+    cache({ ttl: 60 }),
+  ],
+  update: [
+    ...messageStack,
+    requireOwnership(),
+  ],
+  delete: [
+    ...authenticatedApiStack,
+    requireOwnership(),
+  ],
+};
+
+// Group routes
+export const groupRoutes = {
+  create: [
+    ...authenticatedApiStack,
+    validateCreateGroup,
+  ],
+  join: [
+    ...groupStack,
+  ],
+  leave: [
+    ...groupStack,
+  ],
+  manage: [
+    ...groupStack,
+    authorize(['admin', 'moderator']),
+  ],
+};
+
+// User routes
+export const userRoutes = {
+  profile: [
+    ...profileStack,
+    ...dataDecryptionStack,
+  ],
+  updateProfile: [
+    ...sensitiveDataStack,
+  ],
+  avatar: [
+    ...uploadStack,
+    uploadAvatar,
+    validateUploadedFile,
+  ],
+};
+
+// File routes
+export const fileRoutes = {
+  upload: [
+    ...uploadStack,
+    uploadAnyFile,
+    validateUploadedFile,
+  ],
+  image: [
+    ...uploadStack,
+    uploadImage,
+    validateUploadedFile,
+  ],
+  document: [
+    ...uploadStack,
+    uploadDocument,
+    validateUploadedFile,
+  ],
+};
+
+// Search routes
+export const searchRoutes = {
+  global: [
+    ...searchStack,
+  ],
+  messages: [
+    ...searchStack,
+    requireConversationAccess(),
+  ],
+  users: [
+    ...searchStack,
+  ],
+  groups: [
+    ...searchStack,
+  ],
+};
+
+// Admin routes
+export const adminRoutes = {
+  users: [
+    ...adminStack,
+  ],
+  groups: [
+    ...adminStack,
+  ],
+  analytics: [
+    ...adminStack,
+    cache({ ttl: 300 }),
+  ],
+  rateLimits: [
+    ...adminStack,
+  ],
+};
+
+/**
+ * Error Handling Middleware
+ */
+
+// Standard error handling
+export const errorHandlingStack = [
+  errorHandler,
+];
+
+// Upload error handling
+export const uploadErrorHandlingStack = [
   handleUploadError,
   cleanupUploadedFiles,
   errorHandler,
 ];
 
-/**
- * Validation middleware combinations
- */
-export const authValidation = {
-  login: validateLogin,
-  register: validateRegister,
+// Not found handler
+const createNotFoundHandler = () => (req: any, res: any) => {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: 'NOT_FOUND',
+      message: `Route ${req.method} ${req.path} not found`,
+      timestamp: new Date().toISOString(),
+    },
+  });
 };
 
-export const messageValidation = {
-  send: validateSendMessage,
-  // Add other message validations as needed
-};
-
-export const groupValidation = {
-  create: validateCreateGroup,
-  // Add other group validations as needed
-};
+export const notFoundHandler = createNotFoundHandler();
 
 /**
- * Cache middleware combinations
- */
-export const cacheMiddleware = {
-  userProfile: cacheUserProfile,
-  conversations: cacheConversations,
-  messages: cacheMessages,
-  search: cache({ ttl: 300 }),
-  shortTerm: cache({ ttl: 60 }),
-  longTerm: cache({ ttl: 3600 }),
-};
-
-/**
- * Upload middleware combinations
- */
-export const uploadTypes = {
-  image: [uploadImage, validateUploadedFile],
-  document: [uploadDocument, validateUploadedFile],
-  avatar: [uploadAvatar, validateUploadedFile],
-  any: [uploadAnyFile, validateUploadedFile],
-};
-
-/**
- * Security middleware combinations
- */
-export const securityMiddleware = {
-  basic: securityStack,
-  admin: adminSecurityStack,
-  bruteForce: bruteForceProtection({
-    maxAttempts: 10,
-    windowMs: 15 * 60 * 1000,
-    blockDurationMs: 60 * 60 * 1000,
-  }),
-};
-
-/**
- * Utility functions for middleware composition
+ * Utility Functions
  */
 
-/**
- * Compose multiple middleware arrays into one
- */
+// Compose multiple middleware arrays
 export const composeMiddleware = (...middlewareArrays: any[][]) => {
   return middlewareArrays.flat();
 };
 
-/**
- * Create conditional middleware
- */
+// Conditional middleware
 export const conditionalMiddleware = (
   condition: (req: any) => boolean,
   middleware: any
@@ -305,19 +420,15 @@ export const conditionalMiddleware = (
   };
 };
 
-/**
- * Create async middleware wrapper
- */
+// Async middleware wrapper
 export const asyncMiddleware = (fn: any) => {
   return (req: any, res: any, next: any) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 };
 
-/**
- * Middleware timing utility
- */
-export const timeMiddleware = (name: string) => {
+// Timing middleware
+export const timingMiddleware = (name: string) => {
   return (req: any, res: any, next: any) => {
     const start = Date.now();
     res.on('finish', () => {
@@ -329,42 +440,64 @@ export const timeMiddleware = (name: string) => {
 };
 
 /**
- * Request context middleware
+ * Security Utilities
  */
-export const requestContext = (req: any, res: any, next: any) => {
-  req.context = {
-    startTime: Date.now(),
-    requestId: req.headers['x-request-id'],
-    userAgent: req.get('User-Agent'),
-    ip: req.ip,
-    method: req.method,
-    url: req.url,
-  };
-  next();
-};
+
+// Rate limit status endpoint middleware
+export const rateLimitStatusMiddleware = [
+  ...adminStack,
+  getRateLimitStatus,
+];
+
+// Clear rate limits endpoint middleware
+export const clearRateLimitsMiddleware = [
+  ...adminStack,
+  clearRateLimits,
+];
 
 /**
- * Response time middleware
+ * Export all middleware for direct use
  */
-export const responseTime = (req: any, res: any, next: any) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    res.setHeader('X-Response-Time', `${duration}ms`);
-  });
-  next();
-};
-
-// Export individual middleware for direct use
 export {
-  // Auth
+  // Enhanced Security
+  securityHeaders,
+  ipBlockingMiddleware,
+  accountBlockingMiddleware,
+  requestSignatureMiddleware,
+  sessionSecurityMiddleware,
+  messageEncryptionMiddleware,
+  dataEncryptionMiddleware,
+  dataDecryptionMiddleware,
+  burstProtectionMiddleware,
+  authTrackingMiddleware,
+  contentSanitizationMiddleware,
+  fileUploadSecurityMiddleware,
+  requestLoggingMiddleware,
+  corsSecurityMiddleware,
+
+  // Enhanced Rate Limiting
+  apiRateLimiter,
+  authRateLimiter,
+  uploadRateLimiter,
+  messageRateLimiter,
+  searchRateLimiter,
+  passwordResetRateLimiter,
+  registrationRateLimiter,
+  websocketRateLimiter,
+  adminRateLimiter,
+  bruteForceProtection,
+  adaptiveApiRateLimiter,
+  getRateLimitStatus,
+  clearRateLimits,
+
+  // Authentication
   authenticate,
   optionalAuth,
   authorize,
   requireConversationAccess,
   requireGroupAccess,
   requireOwnership,
-  
+
   // Validation
   validate,
   validateBody,
@@ -375,14 +508,14 @@ export {
   validateSendMessage,
   validateCreateGroup,
   sanitizeRequest,
-  
+
   // Cache
   cache,
   cacheUserProfile,
   cacheConversations,
   cacheMessages,
   invalidateCache,
-  
+
   // Upload
   uploadImage,
   uploadDocument,
@@ -391,24 +524,65 @@ export {
   handleUploadError,
   validateUploadedFile,
   cleanupUploadedFiles,
-  
-  // Security
-  securityStack,
-  adminSecurityStack,
-  applyCors,
-  requestId,
-  securityHeaders,
-  bruteForceProtection,
-  
-  // Error handling
+
+  // Error Handling
   errorHandler,
   ApiError,
-  
-  // Rate limiting
-  rateLimiter,
-  authRateLimiter,
-  uploadRateLimiter,
-  
-  // Not found
+};
+
+// Legacy middleware aliases for backward compatibility
+export const authMiddleware = authenticate;
+export const optionalAuthMiddleware = optionalAuth;
+export const adminMiddleware = authorize(['admin']);
+export const rateLimiter = apiRateLimiter;
+export const uploadMiddleware = uploadAnyFile;
+export const basicMiddleware = basicApiStack;
+export const apiMiddleware = authenticatedApiStack;
+export const authRoutesMiddleware = authRoutes;
+
+/**
+ * Default export with all middleware stacks
+ */
+export default {
+  // Security stacks
+  coreSecurityStack,
+  basicApiStack,
+  authenticationStack,
+  authenticatedApiStack,
+  messageStack,
+  uploadStack,
+  adminStack,
+  groupStack,
+  profileStack,
+  searchStack,
+  websocketStack,
+  passwordResetStack,
+  registrationStack,
+  highSecurityStack,
+  publicApiStack,
+  optionalAuthStack,
+  sensitiveDataStack,
+  dataDecryptionStack,
+
+  // Route-specific stacks
+  authRoutes,
+  messageRoutes,
+  groupRoutes,
+  userRoutes,
+  fileRoutes,
+  searchRoutes,
+  adminRoutes,
+
+  // Error handling
+  errorHandlingStack,
+  uploadErrorHandlingStack,
   notFoundHandler,
+
+  // Utilities
+  composeMiddleware,
+  conditionalMiddleware,
+  asyncMiddleware,
+  timingMiddleware,
+  rateLimitStatusMiddleware,
+  clearRateLimitsMiddleware,
 };

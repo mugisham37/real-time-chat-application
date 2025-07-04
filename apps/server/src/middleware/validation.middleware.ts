@@ -27,7 +27,7 @@ import {
   callIceCandidateSchema,
 } from '@chatapp/shared';
 
-interface ValidationOptions {
+export interface ValidationOptions {
   body?: ZodSchema;
   query?: ZodSchema;
   params?: ZodSchema;

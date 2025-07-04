@@ -968,6 +968,56 @@ export class ConversationRepository {
       throw new Error(`Error updating last message: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Get total conversations count
+   */
+  async count(): Promise<number> {
+    try {
+      return await prisma.conversation.count({
+        where: { isActive: true }
+      });
+    } catch (error) {
+      throw new Error(`Error getting conversations count: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get repository statistics
+   */
+  async getStats(): Promise<{
+    total: number;
+    direct: number;
+    group: number;
+    active: number;
+    withMessages: number;
+  }> {
+    try {
+      const [total, direct, group, active, withMessages] = await Promise.all([
+        prisma.conversation.count(),
+        prisma.conversation.count({ where: { type: 'DIRECT' } }),
+        prisma.conversation.count({ where: { type: 'GROUP' } }),
+        prisma.conversation.count({ where: { isActive: true } }),
+        prisma.conversation.count({
+          where: {
+            messages: {
+              some: {}
+            }
+          }
+        }),
+      ]);
+
+      return {
+        total,
+        direct,
+        group,
+        active,
+        withMessages,
+      };
+    } catch (error) {
+      throw new Error(`Error getting conversation stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
 
 // Export singleton instance
