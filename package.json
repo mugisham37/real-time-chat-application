@@ -46,6 +46,7 @@
   "packageManager": "npm@10.2.4",
   "dependencies": {
     "@types/joi": "^17.2.2",
-    "joi": "^17.13.3"
+    "joi": "^17.13.3",
+    "speakeasy": "^2.0.0"
   }
 }
